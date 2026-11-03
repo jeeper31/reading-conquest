@@ -1,6 +1,6 @@
 // Headless screenshots of each screen. Usage: npm run screenshots  (preview server must be running)
 import { chromium } from 'playwright-core';
-const BASE = process.env.BASE_URL || 'http://localhost:4173/';
+const BASE = process.env.BASE_URL || 'http://localhost:4173/reading-conquest/';
 const OUT = new URL('../screenshots/', import.meta.url).pathname;
 const save = {
   v: 1, gold: 340, army: { knight: 8, archer: 6, spearman: 4, ram: 1, catapult: 1 },

@@ -5,7 +5,8 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 // Set HTTPS=1 to serve with a self-signed cert so other devices on the LAN (e.g. the Chromebook)
 // can use the microphone, which browsers only allow on https:// or localhost.
 export default defineConfig({
-  base: './',
+  // Served from GitHub Pages at https://jeeper31.github.io/reading-conquest/
+  base: '/reading-conquest/',
   plugins: process.env.HTTPS ? [basicSsl()] : [],
   server: { host: true, port: 5173 },
   preview: { host: true, port: 4173 },
