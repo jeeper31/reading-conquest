@@ -1,0 +1,2 @@
+Speech clips generated with Kokoro-82M (Apache-2.0, https://huggingface.co/hexgrad/Kokoro-82M), voice af_heart,
+run via kokoro-onnx (MIT). Generator: scripts/gen-phonics-audio.py. See docs/SOUND-IT-OUT.md.
