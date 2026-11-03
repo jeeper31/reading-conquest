@@ -34,7 +34,7 @@ export class MapScene extends Phaser.Scene {
       pg.fillStyle(reached ? 0xffe9a8 : 0xd8c49a, 1).fillEllipse(p.x, p.y, 16, 9);
     });
 
-    const avoid = NODES.map(([x, y]) => new Phaser.Geom.Rectangle(x - 110, y - 120, 220, 200));
+    const avoid = NODES.map(([x, y]) => new Phaser.Geom.Rectangle(x - 120, y - 130, 240, 250));
     avoid.push(new Phaser.Geom.Rectangle(0, 0, W, 90), new Phaser.Geom.Rectangle(600, 440, 700, 300));
     scatterDecor(this, 50, avoid, 12);
 
@@ -88,7 +88,10 @@ export class MapScene extends Phaser.Scene {
     }
     const next = unlocked && save.stars[i] === 0;
     if (next) {
-      const arrow = txt(this, 0, -120 - i * 6, 'v', 44, '#ffe14d');
+      const arrow = this.add.graphics();
+      arrow.fillStyle(0x2b1d14, 1).fillTriangle(-17, -12, 17, -12, 0, 14);
+      arrow.fillStyle(0xffe14d, 1).fillTriangle(-12, -9, 12, -9, 0, 8);
+      arrow.y = -130 - i * 6;
       c.add(arrow);
       this.tweens.add({ targets: arrow, y: arrow.y + 14, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }

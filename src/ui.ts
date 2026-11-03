@@ -146,8 +146,11 @@ export function scatterDecor(scene: Phaser.Scene, count: number, avoid: Phaser.G
   let placed = 0, tries = 0;
   while (placed < count && tries++ < count * 20) {
     const x = rnd.between(20, W - 20), y = rnd.between(30, H - 10);
-    if (avoid.some((r) => r.contains(x, y))) continue;
     const k = rnd.pick(keys);
+    const tall = k === 'tree' || k === 'pine';
+    // check the base and (for trees) the canopy so nothing pokes over UI or castles
+    const probes = tall ? [[x, y], [x, y - 70], [x - 30, y - 40], [x + 30, y - 40]] : [[x, y], [x, y - 20]];
+    if (probes.some(([px, py]) => py < 80 || avoid.some((r) => r.contains(px, py)))) continue;
     const img = scene.add.image(x, y, k).setOrigin(0.5, 0.92).setDepth(y);
     const s = rnd.realInRange(0.8, 1.15);
     img.setScale(s);
