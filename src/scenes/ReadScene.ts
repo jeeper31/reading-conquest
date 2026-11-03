@@ -5,6 +5,9 @@ import { sfx, unlockAudio } from '../audio';
 import { save, persist, pickWord, recordWord, GOLD_PER_WORD } from '../state';
 import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk } from '../speech';
 import { WORD_LEVELS } from '../data/words';
+import { SoundOut } from '../soundout';
+import { breakdown, chunkClip } from '../data/phonics';
+import { preload } from '../phonics-audio';
 
 const MIC_LABELS: Record<MicState, [string, number]> = {
   unknown: ['Mic: tap the mic to start', 0x6b7a8a],
@@ -37,6 +40,8 @@ export class ReadScene extends Phaser.Scene {
   private confetti!: Phaser.GameObjects.Particles.ParticleEmitter;
   private hearBtn!: Button;
   private settings?: Phaser.GameObjects.Container;
+  private soundBtn!: Button;
+  private soundOut?: SoundOut;
 
   constructor() { super('Read'); }
 
@@ -75,7 +80,10 @@ export class ReadScene extends Phaser.Scene {
       fontFamily: READ_FONT, fontSize: '150px', color: '#2b1d14', fontStyle: 'bold', resolution: 2,
     }).setOrigin(0.5);
     this.card.add(this.wordText);
-    this.heardText = txt(this, W / 2, 422, '', 26, '#ffffff');
+    this.heardText = txt(this, W / 2, 452, '', 26, '#ffffff');
+    // Tap the word itself, or the tab under it, to sound it out
+    this.wordText.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.openSoundOut());
+    this.soundBtn = button(this, W / 2, 398, 290, 62, 'Sound it out', COLORS.purple, () => this.openSoundOut(), { fontSize: 28 });
     this.hintText = txt(this, W / 2, 655, '', 30, '#ffffff');
 
     // Mic button
@@ -109,12 +117,27 @@ export class ReadScene extends Phaser.Scene {
 
     queryMicPermission((s) => { this.micState = s; this.updateMicChip(); }).then((s) => { this.micState = s; this.updateMicChip(); });
 
-    this.input.keyboard?.on('keydown-SPACE', () => this.startListening());
+    this.input.keyboard?.on('keydown-SPACE', () => { if (!this.soundOut) this.startListening(); });
+    this.input.keyboard?.on('keydown-S', () => this.openSoundOut());
     this.input.keyboard?.on('keydown-Y', () => this.correct('(grown-up)'));
     this.input.keyboard?.on('keydown-H', () => speakWord(this.word));
-    this.events.once('shutdown', () => { this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
+    this.events.once('shutdown', () => { this.soundOut?.close(); this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
 
+    (window as any).__soundOut = (w?: string) => this.openSoundOut(w);
     this.nextWord();
+  }
+
+  /** Open the "Sound it out" tiles for the current word (or a given word, for the debug hook). */
+  openSoundOut(word = this.word, autoBlend = false) {
+    unlockAudio();
+    if (this.soundOut || this.settings || this.busy) return;
+    if (this.listening) { this.listener.stop(); this.setListening(false); }
+    this.tweens.killTweensOf(this.soundBtn); this.soundBtn.setScale(1);
+    this.soundOut = new SoundOut(this, word, {
+      onClose: () => { this.soundOut = undefined; },
+      onRead: () => this.time.delayedCall(150, () => this.startListening()),
+    });
+    if (autoBlend) this.time.delayedCall(700, () => this.soundOut?.blend());
   }
 
   private updateMicChip() {
@@ -138,6 +161,8 @@ export class ReadScene extends Phaser.Scene {
     this.wordText.setScale(fit);
     this.tweens.add({ targets: this.card, scale: 1, alpha: 1, duration: 380, ease: 'Back.easeOut' });
     this.heardText.setText('');
+    const ch = breakdown(this.word);
+    if (ch) preload(this.word, ch.filter((c) => c.sounds.length).map(chunkClip));
     this.hintText.setText(speechSupported ? 'Tap the red button (or press Space) and read the word!' : 'Read the word out loud to a grown-up!');
     this.streakText.setText(this.streak >= 2 ? `${this.streak} in a row!` : '');
   }
@@ -154,7 +179,7 @@ export class ReadScene extends Phaser.Scene {
 
   private async startListening() {
     unlockAudio();
-    if (this.busy || this.listening) return;
+    if (this.busy || this.listening || this.soundOut) return;
     if (!speechSupported || !secureContextOk()) {
       this.hintText.setText('Speech recognition is not available here - use "He read it!"');
       return;
@@ -236,12 +261,14 @@ export class ReadScene extends Phaser.Scene {
     this.heardText.setText(`I heard: "${heard}"`);
     this.tweens.add({ targets: this.card, x: { from: W / 2 - 14, to: W / 2 }, duration: 320, ease: 'Elastic.easeOut' });
     if (this.tries >= 2) {
-      this.hintText.setText('Listen, then try again!');
-      speakWord(this.word);
+      // Second miss: open the sound-it-out tiles and blend the word for him
+      this.hintText.setText("Let's sound it out together!");
+      this.time.delayedCall(700, () => this.openSoundOut(this.word, true));
     } else {
-      this.hintText.setText('Almost! Try again - or tap "Hear it".');
+      // First miss: offer help
+      this.hintText.setText('Almost! Try again - or tap "Sound it out".');
+      this.tweens.add({ targets: this.soundBtn, scale: 1.12, duration: 260, yoyo: true, repeat: 5 });
     }
-    this.tweens.add({ targets: this.hearBtn, scale: 1.12, duration: 200, yoyo: true, repeat: 2 });
   }
 
   private skip() {

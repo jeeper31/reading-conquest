@@ -458,6 +458,13 @@ function makeFx(scene: Phaser.Scene) {
     c.closePath(); fillStroke(c, fill, lw);
   };
   tex(scene, 'star', 84, 84, (c) => star(c, 42, 44, 38, rad(c, 42, 44, 40, '#fff7a8', '#f0a818'), 4));
+  tex(scene, 'heart', 64, 60, (c) => {
+    c.beginPath(); c.moveTo(32, 54);
+    c.bezierCurveTo(4, 36, 2, 18, 12, 10); c.bezierCurveTo(22, 2, 32, 10, 32, 18);
+    c.bezierCurveTo(32, 10, 42, 2, 52, 10); c.bezierCurveTo(62, 18, 60, 36, 32, 54); c.closePath();
+    fillStroke(c, rad(c, 26, 22, 34, '#ff9aa8', '#e0304a'), 4);
+    c.fillStyle = 'rgba(255,255,255,0.75)'; ellipse(c, 19, 18, 5, 3.5); c.fill();
+  });
   tex(scene, 'star_empty', 84, 84, (c) => star(c, 42, 44, 38, '#6b5a48', 4));
   tex(scene, 'coin', 32, 32, (c) => {
     circle(c, 16, 16, 13); fillStroke(c, rad(c, 16, 16, 14, '#fff3a0', '#e0a21a'), 2.5);

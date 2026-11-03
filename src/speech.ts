@@ -1,4 +1,4 @@
-import { setDuck } from './music/player';
+import { playWord } from './phonics-audio';
 // Speech recognition wrapper + forgiving word matching.
 
 const HOMOPHONE_GROUPS: string[][] = [
@@ -167,20 +167,7 @@ export class Listener {
   }
 }
 
-export function speakWord(word: string, rate = 0.8) {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(word);
-  u.lang = 'en-US';
-  u.rate = rate;
-  u.pitch = 1.1;
-  const voices = window.speechSynthesis.getVoices();
-  const v = voices.find((v) => v.lang === 'en-US' && /Google|Samantha|Natural/i.test(v.name)) || voices.find((v) => v.lang.startsWith('en'));
-  if (v) u.voice = v;
-  setDuck('speech', true);
-  let done = false;
-  const release = () => { if (!done) { done = true; setDuck('speech', false); } };
-  u.onend = release; u.onerror = release;
-  setTimeout(release, 4000);
-  window.speechSynthesis.speak(u);
+/** Say a word aloud: natural pre-generated clip if there is one, else the browser voice. */
+export function speakWord(word: string) {
+  return playWord(word);
 }
