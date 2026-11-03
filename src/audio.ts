@@ -3,7 +3,27 @@
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
-export let muted = false;
+
+// ---- Settings (music and sound effects are toggled separately, saved in localStorage) ----
+const SETTINGS_KEY = 'reading-conquest-settings-v1';
+export const settings: { music: boolean; sfx: boolean } = (() => {
+  try { return { music: true, sfx: true, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+  catch { return { music: true, sfx: true }; }
+})();
+export let muted = !settings.sfx;
+export function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } }
+
+const readyCbs: ((c: AudioContext) => void)[] = [];
+/** Run `cb` once the AudioContext exists and is running (i.e. after the first user gesture). */
+export function onAudioReady(cb: (c: AudioContext) => void) {
+  if (ctx && ctx.state === 'running') cb(ctx); else readyCbs.push(cb);
+}
+function flushReady() {
+  if (!ctx || ctx.state !== 'running') return;
+  readyCbs.splice(0).forEach((cb) => cb(ctx!));
+}
+/** The shared AudioContext, if it has already been created by a user gesture. */
+export function audioCtx(): AudioContext | null { return ctx; }
 
 function ac(): AudioContext | null {
   if (!ctx) {
@@ -16,13 +36,19 @@ function ac(): AudioContext | null {
     noiseBuf = ctx!.createBuffer(1, ctx!.sampleRate, ctx!.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    ctx!.addEventListener('statechange', flushReady);
+    if (muted) master.gain.value = 0;
   }
-  if (ctx && ctx.state === 'suspended') ctx.resume();
+  if (ctx && ctx.state === 'suspended') ctx.resume().then(flushReady).catch(() => {});
+  flushReady();
   return ctx;
 }
 
 export function unlockAudio() { ac(); }
-export function setMuted(m: boolean) { muted = m; if (master) master.gain.value = m ? 0 : 0.55; }
+export function setMuted(m: boolean) {
+  muted = m; settings.sfx = !m; saveSettings();
+  if (master) master.gain.value = m ? 0 : 0.55;
+}
 
 function tone(freq: number, dur: number, type: OscillatorType = 'sine', vol = 0.3, delay = 0, slideTo?: number) {
   const c = ac(); if (!c || muted) return;

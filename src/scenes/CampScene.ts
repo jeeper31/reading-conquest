@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, tiledGrass, scatterDecor, FONT, floatText } from '../ui';
+import { playMusic } from '../music/player';
+import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, tiledGrass, scatterDecor, FONT, floatText , soundToggles } from '../ui';
 import { sfx } from '../audio';
 import {
   save, persist, UNIT_DEFS, UNIT_ORDER, UPGRADES, UpgradeId, UnitType, armySpaceUsed, campSpace, castlesBeaten, armyCount, CASTLES,
@@ -17,6 +18,8 @@ export class CampScene extends Phaser.Scene {
 
   create() {
     fadeIn(this);
+    playMusic('camp');
+    soundToggles(this, 930, 40);
     this.armyVisuals = [];
     tiledGrass(this);
     this.add.image(370, 420, 'dirt').setScale(1.25, 1.05).setDepth(-9000);

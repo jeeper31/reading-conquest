@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, tiledGrass, scatterDecor, FONT } from '../ui';
+import { playMusic } from '../music/player';
+import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, tiledGrass, scatterDecor, FONT , soundToggles } from '../ui';
 import { sfx } from '../audio';
 import { save, CASTLES, armyCount, UNIT_ORDER, UNIT_DEFS } from '../state';
 
@@ -13,6 +14,8 @@ export class MapScene extends Phaser.Scene {
 
   create() {
     fadeIn(this);
+    playMusic('map');
+    soundToggles(this, 930, 40);
     this.popup = undefined;
     tiledGrass(this);
     // River

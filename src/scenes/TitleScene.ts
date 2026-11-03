@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, txt, button, COLORS, tiledGrass, scatterDecor, goTo, fadeIn } from '../ui';
+import { playMusic } from '../music/player';
+import { W, H, txt, button, COLORS, tiledGrass, scatterDecor, goTo, fadeIn , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, castlesBeaten } from '../state';
 
@@ -7,6 +8,8 @@ export class TitleScene extends Phaser.Scene {
   constructor() { super('Title'); }
   create() {
     fadeIn(this);
+    playMusic('camp');
+    soundToggles(this, 1150, 44);
     tiledGrass(this);
     scatterDecor(this, 34, [new Phaser.Geom.Rectangle(300, 120, 680, 520)], 4);
     const keep = this.add.image(W / 2, 330, 'keep').setScale(1.35).setOrigin(0.5, 0.85).setDepth(330);

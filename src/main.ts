@@ -6,6 +6,9 @@ import { CampScene } from './scenes/CampScene';
 import { MapScene } from './scenes/MapScene';
 import { BattleScene } from './scenes/BattleScene';
 import { W, H } from './ui';
+import { unlockAudio, audioCtx, settings } from './audio';
+import { isDucked, musicOn } from './music/player';
+import { renderTrackWav } from './music/render';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -20,3 +23,13 @@ const game = new Phaser.Game({
 });
 
 (window as any).__game = game;
+
+// Chrome autoplay policy: audio (and music) can only start after a user gesture.
+const unlock = () => unlockAudio();
+window.addEventListener('pointerdown', unlock, { capture: true });
+window.addEventListener('keydown', unlock, { capture: true });
+window.addEventListener('touchend', unlock, { capture: true });
+
+// Offline render hook used by scripts/render-music.mjs to make shareable WAV samples.
+(window as any).__renderTrackWav = renderTrackWav;
+(window as any).__audioDebug = () => ({ state: audioCtx()?.state, settings: { ...settings }, ducked: isDucked(), musicOn: musicOn() });

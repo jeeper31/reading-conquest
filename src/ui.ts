@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { sfx, unlockAudio } from './audio';
+import { sfx, unlockAudio, muted, setMuted } from './audio';
+import { musicOn, setMusicOn, onSettingsChange } from './music/player';
 import { save } from './state';
 
 export const W = 1280;
@@ -157,4 +158,50 @@ export function scatterDecor(scene: Phaser.Scene, count: number, avoid: Phaser.G
     if (k === 'tree' || k === 'pine') scene.tweens.add({ targets: img, scaleX: s * 1.03, duration: 1800 + rnd.between(0, 900), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     placed++;
   }
+}
+
+/** Round Music / Sound toggle buttons (separate), shown on every screen. Saved in localStorage. */
+export function soundToggles(scene: Phaser.Scene, x: number, y: number, gap = 62) {
+  const R = 25;
+  const make = (cx: number, kind: 'music' | 'sfx') => {
+    const c = scene.add.container(cx, y).setDepth(30000);
+    const g = scene.add.graphics();
+    c.add(g);
+    const draw = () => {
+      const on = kind === 'music' ? musicOn() : !muted;
+      g.clear();
+      g.fillStyle(0x2b1d14, 1).fillCircle(0, 2, R + 3);
+      g.fillStyle(on ? (kind === 'music' ? 0x8e5bd6 : 0x3b82d8) : 0x7d7d7d, 1).fillCircle(0, 0, R);
+      g.fillStyle(0xffffff, 0.3).fillEllipse(0, -R * 0.45, R * 1.3, R * 0.6);
+      g.fillStyle(0xffffff, 1);
+      if (kind === 'music') {
+        // beamed eighth notes
+        g.fillEllipse(-8, 8, 12, 9).fillEllipse(8, 5, 12, 9);
+        g.fillRect(-4, -11, 3.5, 19).fillRect(12, -14, 3.5, 19);
+        g.beginPath(); g.moveTo(-4, -11); g.lineTo(15.5, -14); g.lineTo(15.5, -8); g.lineTo(-4, -5); g.closePath(); g.fillPath();
+      } else {
+        g.fillRect(-13, -6, 7, 12);
+        g.beginPath(); g.moveTo(-7, -6); g.lineTo(3, -13); g.lineTo(3, 13); g.lineTo(-7, 6); g.closePath(); g.fillPath();
+        if (on) { g.lineStyle(3, 0xffffff, 1); g.beginPath(); g.arc(4, 0, 8, -0.8, 0.8); g.strokePath(); g.beginPath(); g.arc(4, 0, 14, -0.8, 0.8); g.strokePath(); }
+      }
+      if (!on) { g.lineStyle(5, 0xe0453a, 1); g.lineBetween(-15, -15, 15, 15); }
+    };
+    draw();
+    c.setSize(R * 2 + 6, R * 2 + 6).setInteractive({ useHandCursor: true });
+    c.on('pointerdown', (_p: any, _x: any, _y: any, ev: any) => {
+      ev?.stopPropagation?.();
+      unlockAudio();
+      if (kind === 'music') setMusicOn(!musicOn()); else { setMuted(!muted); if (!muted) sfx.click(); }
+      draw();
+      scene.tweens.add({ targets: c, scale: 0.9, duration: 60, yoyo: true });
+      floatText(scene, cx, y + 40, kind === 'music' ? (musicOn() ? 'Music on' : 'Music off') : (!muted ? 'Sound on' : 'Sound off'), '#ffffff', 18);
+    });
+    c.on('pointerover', () => scene.tweens.add({ targets: c, scale: 1.08, duration: 90 }));
+    c.on('pointerout', () => scene.tweens.add({ targets: c, scale: 1, duration: 90 }));
+    return { c, draw };
+  };
+  const a = make(x, 'music'), b = make(x + gap, 'sfx');
+  const off = onSettingsChange(() => { a.draw(); b.draw(); });
+  scene.events.once('shutdown', () => { off(); });
+  return [a.c, b.c];
 }

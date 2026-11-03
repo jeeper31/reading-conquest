@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, txt, button, COLORS, goTo, fadeIn, panel, tiledGrass, scatterDecor, floatText, FONT } from '../ui';
+import { playMusic, playJingle, musicOn } from '../music/player';
+import { W, H, txt, button, COLORS, goTo, fadeIn, panel, tiledGrass, scatterDecor, floatText, FONT , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, persist, CASTLES, CastleDef, UNIT_ORDER, UnitType, unitStats, UNIT_DEFS } from '../state';
 import { makeUnitVisual, animateWalk, UnitVisual, VisualKind } from '../units';
@@ -86,6 +87,8 @@ export class BattleScene extends Phaser.Scene {
 
   create() {
     fadeIn(this);
+    playMusic('battle');
+    soundToggles(this, 862, 40);
     this.def = CASTLES[this.castleIdx];
     this.buildings = []; this.units = []; this.cards = {}; this.hudStars = [];
     this.timeLeft = BATTLE_TIME; this.started = false; this.over = false; this.starsEarned = 0; this.deployedAny = false;
@@ -756,7 +759,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private showResult(win: boolean, stars: number, pct: number, loot: number, returned: number, unlocked: boolean) {
-    win ? sfx.victory() : sfx.defeat();
+    if (musicOn()) playJingle(win ? 'victory' : 'defeat'); else win ? sfx.victory() : sfx.defeat();
     const c = this.add.container(0, 0).setDepth(20000);
     c.add(this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setInteractive());
     // rays

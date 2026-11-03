@@ -1,3 +1,4 @@
+import { setDuck } from './music/player';
 // Speech recognition wrapper + forgiving word matching.
 
 const HOMOPHONE_GROUPS: string[][] = [
@@ -176,5 +177,10 @@ export function speakWord(word: string, rate = 0.8) {
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find((v) => v.lang === 'en-US' && /Google|Samantha|Natural/i.test(v.name)) || voices.find((v) => v.lang.startsWith('en'));
   if (v) u.voice = v;
+  setDuck('speech', true);
+  let done = false;
+  const release = () => { if (!done) { done = true; setDuck('speech', false); } };
+  u.onend = release; u.onerror = release;
+  setTimeout(release, 4000);
   window.speechSynthesis.speak(u);
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button } from '../ui';
+import { playMusic, setDuck } from '../music/player';
+import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, persist, pickWord, recordWord, GOLD_PER_WORD } from '../state';
 import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk } from '../speech';
@@ -41,6 +42,8 @@ export class ReadScene extends Phaser.Scene {
 
   create() {
     fadeIn(this);
+    playMusic('read');
+    soundToggles(this, 372, 42);
     this.busy = false; this.listening = false; this.streak = 0; this.sessionCount = 0; this.tries = 0;
     // Sky + hills backdrop
     const g = this.add.graphics();
@@ -109,7 +112,7 @@ export class ReadScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-SPACE', () => this.startListening());
     this.input.keyboard?.on('keydown-Y', () => this.correct('(grown-up)'));
     this.input.keyboard?.on('keydown-H', () => speakWord(this.word));
-    this.events.once('shutdown', () => { this.listener.stop(); this.input.keyboard?.removeAllListeners(); });
+    this.events.once('shutdown', () => { this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
 
     this.nextWord();
   }
@@ -141,6 +144,7 @@ export class ReadScene extends Phaser.Scene {
 
   private setListening(on: boolean) {
     this.listening = on;
+    setDuck('mic', on); // silence music while the mic listens so recognition only hears the reader
     this.micRings.forEach((r, i) => {
       this.tweens.killTweensOf(r);
       r.setVisible(on).setScale(1).setAlpha(1);
