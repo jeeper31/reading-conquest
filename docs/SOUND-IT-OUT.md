@@ -23,9 +23,13 @@ Each word in `src/data/words.ts` has a hand-written breakdown in `src/data/phoni
 - **Voice:** [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0), voice `af_heart`. It runs locally through [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT), which accepts IPA phoneme input.
 - **Generator:** `scripts/gen-phonics-audio.py` writes `public/audio/sounds/*.mp3` (one clip per sound), `public/audio/words/*.mp3` (one clip per whole word), and `manifest.json`.
 - **Method:** TTS voices pronounce isolated phonemes poorly, so each sound is cut out of a carrier word that the voice says naturally:
-  - Continuous sounds come from the end of a word and are stretched to about 0.5 s.
-  - Fricatives are cut where the hiss starts.
+  - Voiced continuants (m, n, ng, l, r) come from the end of a word and are stretched to about 0.5 s.
+  - Fricatives are never time-stretched (stretching noise made the first /f/ sound like a grinder):
+    - f, s, sh and th take the real hiss from the end of a word and lengthen it by overlap-adding short grains from random spots in it.
+    - v, z and th (as in "this") are built as real voicing, looped in phase, plus the matching hiss.
+    - All of them get a gentle low-pass (7 to 8 kHz), a de-ess on s and z, a level about 6 dB under the vowels, and soft 50 ms / 120 ms fades.
   - Stops are clipped just after voicing begins, so b sounds like /b/ and not "buh".
   - All clips are RMS-normalized, trimmed, and saved as mono 22 kHz MP3.
 - **Playback:** if a word clip is missing, the browser's `speechSynthesis` reads the word instead. Background music ducks while the sounds play.
 - **Demo:** `audio-samples/blend-make.mp3` plays the blend sequence: slow, then fast, then the whole word.
+- **Fricative fix:** `audio-samples/f-old.mp3` / `f-new.mp3`, `fricatives-old.mp3` / `fricatives-new.mp3` (f s sh th v z dh in a row), and before/after plots in `audio-samples/*.png`.
