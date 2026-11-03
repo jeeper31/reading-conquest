@@ -3,7 +3,7 @@ import { playMusic, setDuck } from '../music/player';
 import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, persist, pickWord, recordWord, GOLD_PER_WORD } from '../state';
-import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk } from '../speech';
+import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk, getStrictness, setStrictness, LISTEN_MS, Strictness } from '../speech';
 import { WORD_LEVELS } from '../data/words';
 import { SoundOut } from '../soundout';
 import { breakdown, chunkClip } from '../data/phonics';
@@ -42,6 +42,9 @@ export class ReadScene extends Phaser.Scene {
   private settings?: Phaser.GameObjects.Container;
   private soundBtn!: Button;
   private soundOut?: SoundOut;
+  private countdown!: Phaser.GameObjects.Graphics;
+  private listenUntil = 0;
+  private micSettings?: Phaser.GameObjects.Container;
 
   constructor() { super('Read'); }
 
@@ -69,7 +72,7 @@ export class ReadScene extends Phaser.Scene {
     button(this, 248, 42, 140, 58, 'Words', COLORS.purple, () => this.openSettings(), { fontSize: 24 });
     this.gold = goldHud(this);
     this.streakText = txt(this, W / 2, 40, '', 30, '#ffe14d');
-    this.sessionText = txt(this, W - 130, 92, 'Read today: 0', 20);
+    this.sessionText = txt(this, W - 165, 92, 'Read today: 0', 20);
     this.micChip = this.add.container(W / 2, 92);
     this.updateMicChip();
 
@@ -100,8 +103,10 @@ export class ReadScene extends Phaser.Scene {
     mg.fillStyle(0xff8a7a, 0.6).fillEllipse(0, -34, 90, 34);
     this.micBtn.add(mg);
     this.micBtn.add(this.add.image(0, 0, 'mic').setScale(1.4));
+    this.countdown = this.add.graphics();
+    this.micBtn.add(this.countdown);
     this.micBtn.setSize(150, 150).setInteractive({ useHandCursor: true });
-    this.micBtn.on('pointerdown', () => this.startListening());
+    this.micBtn.on('pointerdown', () => (this.listening ? this.stopListening() : this.startListening()));
     this.tweens.add({ targets: this.micBtn, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     this.hearBtn = button(this, W / 2 - 300, 545, 210, 76, 'Hear it', COLORS.blue, () => { unlockAudio(); speakWord(this.word); }, { icon: 'speaker', fontSize: 28 });
@@ -109,6 +114,7 @@ export class ReadScene extends Phaser.Scene {
     // Grown-up override (always available; prominent if speech recognition is unavailable)
     const noSpeech = !speechSupported || !secureContextOk();
     button(this, W - 140, H - 50, 250, 64, noSpeech ? 'He read it!' : 'Grown-up: correct', COLORS.green, () => this.correct('(grown-up)'), { fontSize: noSpeech ? 30 : 20 });
+    this.gearButton(W - 38, 92);
 
     this.confetti = this.add.particles(0, 0, 'puff', {
       lifespan: 1300, speed: { min: 250, max: 650 }, angle: { min: 200, max: 340 }, gravityY: 700,
@@ -117,7 +123,7 @@ export class ReadScene extends Phaser.Scene {
 
     queryMicPermission((s) => { this.micState = s; this.updateMicChip(); }).then((s) => { this.micState = s; this.updateMicChip(); });
 
-    this.input.keyboard?.on('keydown-SPACE', () => { if (!this.soundOut) this.startListening(); });
+    this.input.keyboard?.on('keydown-SPACE', () => { if (this.soundOut || this.micSettings) return; if (this.listening) this.stopListening(); else this.startListening(); });
     this.input.keyboard?.on('keydown-S', () => this.openSoundOut());
     this.input.keyboard?.on('keydown-Y', () => this.correct('(grown-up)'));
     this.input.keyboard?.on('keydown-H', () => speakWord(this.word));
@@ -167,8 +173,28 @@ export class ReadScene extends Phaser.Scene {
     this.streakText.setText(this.streak >= 2 ? `${this.streak} in a row!` : '');
   }
 
+  update() {
+    // "Listening..." countdown ring: a yellow arc that runs down over the listening window
+    this.countdown.clear();
+    if (!this.listening) return;
+    const left = Math.max(0, this.listenUntil - this.time.now);
+    const frac = left / LISTEN_MS;
+    this.countdown.lineStyle(12, 0xffe14d, 1).beginPath()
+      .arc(0, 0, 86, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac, false).strokePath();
+    const secs = Math.ceil(left / 1000);
+    this.hintText.setText(secs > 0 ? `Listening... read the word!  ${secs}` : 'Listening...');
+  }
+
+  private stopListening() {
+    this.listener.stop();
+    this.setListening(false);
+    this.hintText.setText('Tap the red button (or press Space) and read the word!');
+  }
+
   private setListening(on: boolean) {
     this.listening = on;
+    this.listenUntil = on ? this.time.now + LISTEN_MS : 0;
+    if (!on) this.countdown?.clear();
     setDuck('mic', on); // silence music while the mic listens so recognition only hears the reader
     this.micRings.forEach((r, i) => {
       this.tweens.killTweensOf(r);
@@ -188,8 +214,8 @@ export class ReadScene extends Phaser.Scene {
     this.setListening(true);
     this.hintText.setText('Listening... read the word!');
     this.heardText.setText('');
-    const res = await this.listener.listen(this.word, (heard) => this.heardText.setText(`I hear: "${heard}"`));
-    if (!this.scene.isActive()) return;
+    const res = await this.listener.listen(this.word, { onInterim: (heard) => this.heardText.setText(`I hear: "${heard}"`), mode: getStrictness() });
+    if (!this.scene.isActive() || res.error === 'cancelled') return;
     this.setListening(false);
     if (this.micState !== 'granted' && !res.error) { this.micState = 'granted'; this.updateMicChip(); }
     if (res.matched) return this.correct(res.heard);
@@ -202,8 +228,14 @@ export class ReadScene extends Phaser.Scene {
       this.hintText.setText('Speech needs the internet. Check Wi-Fi, or use the grown-up button.');
       return;
     }
-    if (!res.heard) {
-      this.hintText.setText("I didn't hear anything. Tap the button and try again!");
+    if (res.error === 'audio-capture') {
+      this.hintText.setText("I can't find a microphone. Check it's plugged in, or use the grown-up button.");
+      return;
+    }
+    if (res.nothing || res.error) {
+      // Silence, just "um", or a long chat in the background: not a miss, just try again.
+      this.heardText.setText(res.heard ? `I heard: "${res.heard}"` : '');
+      this.hintText.setText("I didn't hear you. Tap and try again!");
       return;
     }
     this.wrong(res.heard);
@@ -277,6 +309,50 @@ export class ReadScene extends Phaser.Scene {
     this.setListening(false);
     this.streak = 0;
     this.nextWord();
+  }
+
+  /** Small gear (grown-ups): how picky the microphone is. */
+  private gearButton(x: number, y: number) {
+    const c = this.add.container(x, y).setDepth(100);
+    const g = this.add.graphics();
+    g.fillStyle(0x2b1d14, 0.85).fillCircle(0, 0, 28);
+    g.fillStyle(0xe8e0d0, 1);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.fillCircle(Math.cos(a) * 15, Math.sin(a) * 15, 5);
+    }
+    g.fillCircle(0, 0, 14);
+    g.fillStyle(0x2b1d14, 1).fillCircle(0, 0, 6);
+    c.add(g);
+    c.setSize(60, 60).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.openMicSettings());
+    return c;
+  }
+
+  private openMicSettings() {
+    if (this.micSettings || this.settings || this.soundOut) return;
+    if (this.listening) this.stopListening();
+    const c = this.add.container(0, 0).setDepth(500);
+    this.micSettings = c;
+    c.add(this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setInteractive());
+    c.add(panel(this, W / 2, H / 2, 720, 470));
+    c.add(txt(this, W / 2, H / 2 - 190, 'Microphone', 40));
+    c.add(txt(this, W / 2, H / 2 - 150, 'How picky should it be? (grown-ups)', 20, '#5a3418', { stroke: '#00000000', strokeThickness: 0 }));
+    const opts: [Strictness, string, string][] = [
+      ['forgiving', 'Forgiving', 'Close is good enough: "pig" for big, "and" for in'],
+      ['normal', 'Normal', 'Small slips only: "kat" for cat, "hey" for he'],
+      ['strict', 'Strict', 'Must hear the exact word (or one that sounds the same)'],
+    ];
+    const cur = getStrictness();
+    opts.forEach(([id, name, desc], i) => {
+      const y = H / 2 - 80 + i * 88;
+      c.add(button(this, W / 2 - 230, y, 180, 62, name, id === cur ? COLORS.green : COLORS.grey, () => {
+        setStrictness(id);
+        c.destroy(); this.micSettings = undefined; this.openMicSettings();
+      }, { fontSize: 24 }));
+      c.add(this.add.text(W / 2 - 120, y, desc, { fontFamily: FONT, fontSize: '20px', color: '#2b1d14', resolution: 2, wordWrap: { width: 440 } }).setOrigin(0, 0.5));
+    });
+    c.add(txt(this, W / 2, H / 2 + 165, `Each tap listens for ${LISTEN_MS / 1000} seconds, then stops.`, 18, '#5a3418', { stroke: '#00000000', strokeThickness: 0 }));
+    c.add(button(this, W / 2, H / 2 + 205, 200, 56, 'Done', COLORS.blue, () => { c.destroy(); this.micSettings = undefined; }, { fontSize: 26 }));
   }
 
   private openSettings() {
