@@ -9,7 +9,7 @@ page.on('pageerror', (e) => errs.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
 page.on('response', (r) => { if (r.url().includes('/audio/')) audio.push(`${r.status()} ${r.url().split('/audio/')[1]}`); });
 await page.goto(BASE + '?scene=Read'); await page.waitForTimeout(1800);
-await page.screenshot({ path: 'screenshots/02-reading.png' });
+if (process.env.SHOTS !== '0') await page.screenshot({ path: 'screenshots/02-reading.png' });
 const box = await page.locator('canvas').boundingBox();
 const s = box.width / 1280, at = (x, y) => page.mouse.click(box.x + x * s, box.y + y * s);
 await at(640, 398); // the "Sound it out" button
