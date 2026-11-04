@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { Team } from './art';
-import type { UnitType } from './state';
+import { playerGear, type UnitType } from './state';
+import { ARMOR_BULK, type Gear } from './gear';
+import { bodyKey, weaponKey, siegeKey, BODY_ORIGIN, WEAPON_ORIGIN, handPos } from './art-gear';
 
 export type VisualKind = UnitType | 'defender';
 
@@ -14,9 +16,20 @@ export interface UnitVisual {
   shadow: Phaser.GameObjects.Image;
   restAngle: number;
   kind: VisualKind;
+  gear: Gear;
+  weaponY: number; // weapon rest height (walk bob is added to this)
 }
 
-export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team, scale = 1): UnitVisual {
+/** Texture key for a unit's icon (body only), in the given gear. */
+export function iconKey(kind: VisualKind, team: Team, gear: Gear = kind === 'defender' ? { armor: 1, weapon: 1 } : playerGear(kind)) {
+  if (kind === 'ram') return siegeKey('ram_body', gear.weapon);
+  if (kind === 'catapult') return siegeKey('cata_body', gear.weapon);
+  return bodyKey(kind, team, gear.armor);
+}
+
+/** gear defaults to what our troops currently wear (from upgrades); pass it for enemies or previews. */
+export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team, scale = 1, gearIn?: Gear): UnitVisual {
+  const gear = gearIn ?? (kind === 'defender' ? { armor: 1, weapon: 1 } : playerGear(kind));
   const root = scene.add.container(0, 0);
   const rig = scene.add.container(0, 0);
   const shadow = scene.add.image(0, 0, 'shadow');
@@ -27,41 +40,40 @@ export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team
   let weapon: Phaser.GameObjects.Image | undefined;
   let part: Phaser.GameObjects.Image | undefined;
   let restAngle = 0;
+  let weaponY = 0;
 
   if (kind === 'ram') {
     shadow.setScale(1.8, 1.6);
-    part = scene.add.image(4, -16, 'ram_log').setOrigin(0.15, 0.5);
-    body = scene.add.image(0, 2, 'ram_body').setOrigin(0.5, 0.9);
+    part = scene.add.image(4, -16, siegeKey('ram_log', gear.weapon)).setOrigin(0.15, 0.5);
+    body = scene.add.image(0, 2, siegeKey('ram_body', gear.weapon)).setOrigin(0.5, 0.9);
     rig.add([part, body]);
   } else if (kind === 'catapult') {
     shadow.setScale(1.7, 1.5);
-    body = scene.add.image(0, 2, 'cata_body').setOrigin(0.5, 0.9);
-    part = scene.add.image(0, -30, 'cata_arm').setOrigin(0.5, 0.95);
+    body = scene.add.image(0, 2, siegeKey('cata_body', gear.weapon)).setOrigin(0.5, 0.9);
+    part = scene.add.image(0, -30, siegeKey('cata_arm', gear.weapon)).setOrigin(0.5, 0.95);
     restAngle = -55;
     part.setAngle(restAngle);
     rig.add([part, body]);
   } else {
-    shadow.setScale(0.75);
-    const fl = scene.add.image(-5, -3, 'foot');
-    const fr = scene.add.image(6, -3, 'foot');
+    const bulk = ARMOR_BULK[gear.armor] ?? 1;
+    shadow.setScale(0.75 * bulk);
+    const fl = scene.add.image(-5, -3, 'foot').setScale(1 + (bulk - 1) * 1.6);
+    const fr = scene.add.image(6, -3, 'foot').setScale(1 + (bulk - 1) * 1.6);
     feet.push(fl, fr);
-    const key = kind === 'defender' ? 'defender_red' : `${kind}_${team}`;
-    body = scene.add.image(0, -2, key).setOrigin(0.46, 0.92);
+    body = scene.add.image(0, -2, bodyKey(kind, team, gear.armor)).setOrigin(BODY_ORIGIN.x, BODY_ORIGIN.y);
     rig.add([fl, fr, body]);
-    if (kind === 'knight' || kind === 'defender') {
-      weapon = scene.add.image(10, -20, 'sword').setOrigin(0.5, 0.92);
-      restAngle = 35;
-    } else if (kind === 'spearman') {
-      weapon = scene.add.image(8, -18, 'spear').setOrigin(0.5, 0.75);
-      restAngle = 20;
-    } else if (kind === 'archer') {
-      weapon = scene.add.image(13, -22, 'bow').setOrigin(0.3, 0.5);
-      restAngle = 0;
-    }
-    if (weapon) { weapon.setAngle(restAngle); rig.add(weapon); }
+    const wk = kind === 'defender' ? 'knight' : kind;
+    const hand = handPos(kind, gear.armor);
+    const o = WEAPON_ORIGIN[wk][gear.weapon];
+    weapon = scene.add.image(hand.x, hand.y, weaponKey(wk, gear.weapon)).setOrigin(o.x, o.y);
+    weaponY = hand.y;
+    restAngle = wk === 'knight' ? 35 : wk === 'spearman' ? 20 : 0;
+    weapon.setData('x0', hand.x);
+    weapon.setAngle(restAngle);
+    rig.add(weapon);
   }
   root.setScale(scale);
-  return { root, rig, body, weapon, part, feet, shadow, restAngle, kind };
+  return { root, rig, body, weapon, part, feet, shadow, restAngle, kind, gear, weaponY };
 }
 
 /** Advance a walk cycle. phase in radians. */
@@ -77,11 +89,12 @@ export function animateWalk(v: UnitVisual, phase: number, moving: boolean) {
     v.body.rotation = s * 0.08;
     v.feet[0].x = -5 + s * 4; v.feet[0].y = -3 - Math.max(0, s) * 3;
     v.feet[1].x = 6 - s * 4; v.feet[1].y = -3 - Math.max(0, -s) * 3;
-    if (v.weapon && !v.weapon.getData('busy')) v.weapon.y = (v.kind === 'archer' ? -22 : -20) - Math.abs(s) * 4;
+    if (v.weapon && !v.weapon.getData('busy')) v.weapon.y = v.weaponY - Math.abs(s) * 4;
   } else {
     const s = Math.sin(phase * 0.5);
     v.body.y = -2 - (s + 1) * 1.2;
     v.body.rotation = 0;
     v.feet[0].x = -5; v.feet[0].y = -3; v.feet[1].x = 6; v.feet[1].y = -3;
+    if (v.weapon && !v.weapon.getData('busy')) v.weapon.y = v.weaponY;
   }
 }

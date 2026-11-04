@@ -4,6 +4,7 @@ import { TitleScene } from './scenes/TitleScene';
 import { ReadScene } from './scenes/ReadScene';
 import { CampScene } from './scenes/CampScene';
 import { MapScene } from './scenes/MapScene';
+import { ArmoryScene } from './scenes/ArmoryScene';
 import { BattleScene } from './scenes/BattleScene';
 import { W, H } from './ui';
 import { unlockAudio, audioCtx, settings } from './audio';
@@ -19,7 +20,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   input: { activePointers: 3 },
   render: { antialias: true, roundPixels: false },
-  scene: [BootScene, TitleScene, ReadScene, CampScene, MapScene, BattleScene],
+  scene: [BootScene, TitleScene, ReadScene, CampScene, MapScene, BattleScene, ArmoryScene],
 });
 
 (window as any).__game = game;

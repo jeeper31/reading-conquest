@@ -119,5 +119,22 @@ export const sfx = {
   coin2x() { tone(988, 0.07, 'square', 0.11); tone(1319, 0.08, 'square', 0.11, 0.06); tone(1760, 0.22, 'square', 0.09, 0.12); },
   /** Streak ended: soft and friendly, not a buzzer. */
   streakEnd() { tone(523, 0.16, 'triangle', 0.1); tone(440, 0.16, 'triangle', 0.1, 0.12); tone(392, 0.3, 'triangle', 0.09, 0.24); },
+  /** Forge hammer clang (i = 0,1,2 rises a little each hit). */
+  anvil(i = 0) {
+    const f = 1250 + i * 160;
+    tone(f, 0.16, 'square', 0.07); tone(f * 1.51, 0.22, 'triangle', 0.08); tone(f * 2.02, 0.12, 'sine', 0.05);
+    noise(0.06, 0.18, 3500, 'highpass');
+  },
+  /** Upgrade reveal: an 8-bit "power up" climb, bigger for higher tiers. */
+  upgrade(level = 1) {
+    const base = [392, 523, 659, 784, 1047];
+    const up = [...base, ...(level >= 3 ? [1319, 1568] : [])];
+    up.forEach((f, i) => { tone(f, 0.1, 'square', 0.1, i * 0.07); tone(f / 2, 0.1, 'triangle', 0.12, i * 0.07); });
+    const end = up.length * 0.07;
+    const top = level >= 3 ? 1568 : 1047;
+    [top, top * 1.26, top * 1.5].forEach((f) => tone(f, 0.6, 'square', 0.05, end));
+    tone(top / 2, 0.7, 'triangle', 0.16, end);
+    for (let i = 0; i < 4 + level; i++) tone(i % 2 ? 2637 : 2093, 0.06, 'square', 0.05, end + 0.12 + i * 0.07);
+  },
   horn() { tone(196, 0.9, 'sawtooth', 0.1, 0, 220); tone(294, 0.9, 'sawtooth', 0.08, 0.05, 330); },
 };

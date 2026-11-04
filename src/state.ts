@@ -1,4 +1,5 @@
 import { DEFAULT_ENABLED_LEVELS, WORD_LEVELS } from './data/words';
+import { sanitizeUpgrades, type UpgradeId, type Gear } from './gear';
 
 export type UnitType = 'knight' | 'archer' | 'spearman' | 'ram' | 'catapult';
 
@@ -28,14 +29,8 @@ export const UNIT_DEFS: Record<UnitType, UnitDef> = {
 
 export const UNIT_ORDER: UnitType[] = ['knight', 'archer', 'spearman', 'ram', 'catapult'];
 
-export type UpgradeId = 'sword' | 'bow' | 'armor' | 'siege';
-export interface UpgradeDef { id: UpgradeId; name: string; blurb: string; costs: number[] }
-export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
-  sword: { id: 'sword', name: 'Sharper Swords', blurb: '+25% knight & spear damage', costs: [100, 200, 350, 550] },
-  bow:   { id: 'bow',   name: 'Longbows',       blurb: '+25% archer damage & range', costs: [100, 200, 350, 550] },
-  armor: { id: 'armor', name: 'Steel Armor',    blurb: '+20% health for all troops', costs: [120, 240, 400, 600] },
-  siege: { id: 'siege', name: 'Siege Works',    blurb: '+30% ram & catapult damage', costs: [150, 300, 500] },
-};
+export { UPGRADES, UPGRADE_ORDER } from './gear';
+export type { UpgradeId } from './gear';
 
 export interface CastleDef {
   name: string;
@@ -106,7 +101,7 @@ function load(): SaveData {
     if (!raw) return fresh();
     const d = { ...fresh(), ...JSON.parse(raw) } as SaveData;
     d.army = { ...fresh().army, ...d.army };
-    d.upgrades = { ...fresh().upgrades, ...d.upgrades };
+    d.upgrades = sanitizeUpgrades(d.upgrades); // old saves: keep their levels, fill gaps with 0
     while (d.stars.length < CASTLES.length) d.stars.push(0);
     d.enabledLevels = d.enabledLevels.filter((id) => WORD_LEVELS.some((l) => l.id === id));
     if (!d.enabledLevels.length) d.enabledLevels = [...DEFAULT_ENABLED_LEVELS];
@@ -139,6 +134,13 @@ export function armySpaceUsed(): number {
 
 export function armyCount(): number {
   return UNIT_ORDER.reduce((sum, t) => sum + save.army[t], 0);
+}
+
+/** The gear our own troops are wearing right now (drives how they look). */
+export function playerGear(t: UnitType): Gear {
+  const u = save.upgrades;
+  const weapon = t === 'archer' ? u.bow : t === 'ram' || t === 'catapult' ? u.siege : u.sword;
+  return { armor: u.armor, weapon };
 }
 
 /** Unit stats with upgrades applied. */

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { makeUnitVisual } from '../units';
 import { playMusic } from '../music/player';
 import { W, H, txt, button, COLORS, tiledGrass, scatterDecor, goTo, fadeIn , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
@@ -14,9 +15,11 @@ export class TitleScene extends Phaser.Scene {
     scatterDecor(this, 34, [new Phaser.Geom.Rectangle(300, 120, 680, 520)], 4);
     const keep = this.add.image(W / 2, 330, 'keep').setScale(1.35).setOrigin(0.5, 0.85).setDepth(330);
     this.tweens.add({ targets: keep, y: 322, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const k1 = this.add.image(W / 2 - 170, 470, 'knight_blue').setScale(2).setDepth(470);
-    const k2 = this.add.image(W / 2 + 170, 470, 'archer_blue').setScale(2).setFlipX(true).setDepth(470);
-    [k1, k2].forEach((k, i) => this.tweens.add({ targets: k, y: 460, duration: 500, yoyo: true, repeat: -1, delay: i * 250, ease: 'Sine.easeInOut' }));
+    const k1 = makeUnitVisual(this, 'knight', 'blue', 2).root.setPosition(W / 2 - 170, 525).setDepth(470);
+    const a2 = makeUnitVisual(this, 'archer', 'blue', 2);
+    a2.rig.scaleX = -1;
+    const k2 = a2.root.setPosition(W / 2 + 170, 525).setDepth(470);
+    [k1, k2].forEach((k, i) => this.tweens.add({ targets: k, y: 515, duration: 500, yoyo: true, repeat: -1, delay: i * 250, ease: 'Sine.easeInOut' }));
 
     const t = txt(this, W / 2, 95, 'READING CONQUEST', 84, '#ffe14d').setDepth(9000);
     t.setStroke('#2b1d14', 14);

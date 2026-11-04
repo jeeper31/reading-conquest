@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { iconKey } from '../units';
 import { playMusic, setDuck } from '../music/player';
 import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button, soundToggles, floatText } from '../ui';
 import { sfx, unlockAudio } from '../audio';
@@ -68,7 +69,7 @@ export class ReadScene extends Phaser.Scene {
     // little camp on the hill
     this.add.image(120, 640, 'tent').setScale(0.9);
     this.add.image(1170, 600, 'keep').setScale(0.55).setAlpha(0.95);
-    this.add.image(230, 680, 'knight_blue').setScale(1.4);
+    this.add.image(230, 680, iconKey('knight', 'blue')).setScale(1.3);
 
     // Top bar
     button(this, 90, 42, 150, 58, 'Camp', COLORS.blue, () => { this.listener.stop(); goTo(this, 'Camp'); }, { fontSize: 26 });

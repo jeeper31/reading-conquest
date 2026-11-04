@@ -1,8 +1,10 @@
 // Procedural, canvas-drawn art. Everything is generated at boot — no image files needed.
 import Phaser from 'phaser';
+import { generateGearArt } from './art-gear';
 
 type Ctx = CanvasRenderingContext2D;
-const OUT = '#2b1d14';
+export const OUT = '#2b1d14';
+export type Ctx2 = CanvasRenderingContext2D;
 
 export const TEAM = {
   blue: { main: '#3d7be0', dark: '#24509e', light: '#7fb0ff' },
@@ -10,7 +12,7 @@ export const TEAM = {
 };
 export type Team = keyof typeof TEAM;
 
-function tex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void) {
+export function tex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void) {
   if (scene.textures.exists(key)) return;
   const t = scene.textures.createCanvas(key, w, h)!;
   const c = t.context;
@@ -20,7 +22,7 @@ function tex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: C
   t.refresh();
 }
 
-function rr(c: Ctx, x: number, y: number, w: number, h: number, r: number) {
+export function rr(c: Ctx, x: number, y: number, w: number, h: number, r: number) {
   c.beginPath();
   c.moveTo(x + r, y);
   c.arcTo(x + w, y, x + w, y + h, r);
@@ -30,7 +32,7 @@ function rr(c: Ctx, x: number, y: number, w: number, h: number, r: number) {
   c.closePath();
 }
 
-function fillStroke(c: Ctx, fill: string | CanvasGradient, lw = 2.5, stroke = OUT) {
+export function fillStroke(c: Ctx, fill: string | CanvasGradient, lw = 2.5, stroke = OUT) {
   c.fillStyle = fill;
   c.fill();
   c.lineWidth = lw;
@@ -38,24 +40,24 @@ function fillStroke(c: Ctx, fill: string | CanvasGradient, lw = 2.5, stroke = OU
   c.stroke();
 }
 
-function circle(c: Ctx, x: number, y: number, r: number) {
+export function circle(c: Ctx, x: number, y: number, r: number) {
   c.beginPath();
   c.arc(x, y, r, 0, Math.PI * 2);
 }
 
-function ellipse(c: Ctx, x: number, y: number, rx: number, ry: number) {
+export function ellipse(c: Ctx, x: number, y: number, rx: number, ry: number) {
   c.beginPath();
   c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
 }
 
-function lin(c: Ctx, y0: number, y1: number, a: string, b: string) {
+export function lin(c: Ctx, y0: number, y1: number, a: string, b: string) {
   const g = c.createLinearGradient(0, y0, 0, y1);
   g.addColorStop(0, a);
   g.addColorStop(1, b);
   return g;
 }
 
-function rad(c: Ctx, x: number, y: number, r: number, a: string, b: string) {
+export function rad(c: Ctx, x: number, y: number, r: number, a: string, b: string) {
   const g = c.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
   g.addColorStop(0, a);
   g.addColorStop(1, b);
@@ -70,131 +72,10 @@ function rng(seed: number) {
   };
 }
 
-// ---------------------------------------------------------------- characters
-function drawHead(c: Ctx, x: number, y: number, kind: string, team: Team) {
-  const T = TEAM[team];
-  // face
-  circle(c, x, y, 10);
-  fillStroke(c, rad(c, x, y, 11, '#ffdcb8', '#e9a87c'));
-  if (kind === 'knight' || kind === 'defender') {
-    // steel helmet covering top + visor
-    c.beginPath();
-    c.arc(x, y, 11, Math.PI * 0.95, Math.PI * 2.05);
-    c.lineTo(x + 11, y + 3);
-    c.lineTo(x - 11, y + 3);
-    c.closePath();
-    fillStroke(c, lin(c, y - 11, y + 3, '#eef2f7', '#8d99a8'));
-    c.fillStyle = OUT;
-    rr(c, x - 1, y - 2, 11, 3, 1.5);
-    c.fill();
-    // plume
-    c.beginPath();
-    c.moveTo(x - 2, y - 11);
-    c.quadraticCurveTo(x - 14, y - 20, x - 16, y - 8);
-    c.quadraticCurveTo(x - 8, y - 12, x - 2, y - 11);
-    fillStroke(c, T.main, 2);
-  } else if (kind === 'archer') {
-    // hood
-    c.beginPath();
-    c.arc(x, y - 1, 12, Math.PI * 0.85, Math.PI * 2.15);
-    c.quadraticCurveTo(x + 12, y + 6, x + 6, y + 4);
-    c.lineTo(x - 6, y + 4);
-    c.quadraticCurveTo(x - 12, y + 6, x - 11, y + 4);
-    c.closePath();
-    fillStroke(c, lin(c, y - 13, y + 5, '#5fb04a', '#2f6b25'));
-    c.fillStyle = '#ffdcb8';
-    ellipse(c, x + 3, y + 1, 6, 4.5);
-    c.fill();
-    // eyes
-    c.fillStyle = OUT;
-    circle(c, x + 2, y, 1.6); c.fill();
-    circle(c, x + 6.5, y, 1.6); c.fill();
-  } else if (kind === 'spearman') {
-    // leather cap with team band
-    c.beginPath();
-    c.arc(x, y, 11, Math.PI, Math.PI * 2);
-    c.closePath();
-    fillStroke(c, lin(c, y - 11, y, '#c58a52', '#8a5a2e'));
-    c.fillStyle = T.main;
-    c.fillRect(x - 10.5, y - 3, 21, 3);
-    c.fillStyle = OUT;
-    circle(c, x + 3, y + 3, 1.6); c.fill();
-    circle(c, x + 7, y + 3, 1.6); c.fill();
-    // little moustache
-    c.strokeStyle = '#6b3d1c'; c.lineWidth = 2;
-    c.beginPath(); c.moveTo(x + 2, y + 7); c.quadraticCurveTo(x + 5, y + 5, x + 9, y + 7); c.stroke();
-  }
-}
-
-function drawBody(c: Ctx, cx: number, cy: number, team: Team, kind: string) {
-  const T = TEAM[team];
-  // torso
-  rr(c, cx - 11, cy - 9, 22, 21, 8);
-  fillStroke(c, lin(c, cy - 9, cy + 12, T.light, T.dark));
-  if (kind === 'knight' || kind === 'defender') {
-    // chest plate
-    rr(c, cx - 7, cy - 6, 14, 12, 5);
-    fillStroke(c, lin(c, cy - 6, cy + 6, '#f2f5f8', '#97a3b1'), 1.5);
-  }
-  // belt
-  c.fillStyle = '#5a3418';
-  c.fillRect(cx - 10, cy + 5, 20, 3.5);
-  c.fillStyle = '#f2c230';
-  c.fillRect(cx - 2, cy + 4.5, 4, 4.5);
-}
-
-function drawShield(c: Ctx, x: number, y: number, team: Team) {
-  const T = TEAM[team];
-  c.beginPath();
-  c.moveTo(x - 8, y - 9);
-  c.lineTo(x + 8, y - 9);
-  c.quadraticCurveTo(x + 8, y + 6, x, y + 11);
-  c.quadraticCurveTo(x - 8, y + 6, x - 8, y - 9);
-  c.closePath();
-  fillStroke(c, lin(c, y - 9, y + 11, T.light, T.dark));
-  c.strokeStyle = '#f2c230'; c.lineWidth = 2;
-  c.beginPath(); c.moveTo(x, y - 7); c.lineTo(x, y + 8); c.moveTo(x - 6, y - 3); c.lineTo(x + 6, y - 3); c.stroke();
-}
-
-function makeCharacter(scene: Phaser.Scene, kind: string, team: Team) {
-  tex(scene, `${kind}_${team}`, 48, 56, (c) => {
-    drawBody(c, 22, 38, team, kind);
-    drawHead(c, 24, 20, kind, team);
-    if (kind === 'knight' || kind === 'defender') drawShield(c, 11, 38, team);
-    if (kind === 'archer') {
-      // quiver on back
-      rr(c, 6, 24, 7, 18, 3);
-      fillStroke(c, '#8a5a2e', 2);
-      c.strokeStyle = '#f5f0e0'; c.lineWidth = 2;
-      c.beginPath(); c.moveTo(8, 24); c.lineTo(6, 18); c.moveTo(11, 24); c.lineTo(11, 17); c.stroke();
-    }
-  });
-}
+// Soldiers, weapons and siege engines (all gear tiers) live in art-gear.ts.
 
 // ---------------------------------------------------------------- weapons
 function makeWeapons(scene: Phaser.Scene) {
-  tex(scene, 'sword', 12, 40, (c) => {
-    // pointing up; handle at bottom
-    c.beginPath();
-    c.moveTo(6, 1); c.lineTo(10, 7); c.lineTo(10, 28); c.lineTo(2, 28); c.lineTo(2, 7); c.closePath();
-    fillStroke(c, lin(c, 0, 28, '#ffffff', '#a9b6c4'), 2);
-    c.fillStyle = '#f2c230'; rr(c, 0, 27, 12, 4, 2); c.fill(); c.strokeStyle = OUT; c.lineWidth = 1.5; c.stroke();
-    c.fillStyle = '#6b3d1c'; c.fillRect(4.5, 31, 3, 8);
-  });
-  tex(scene, 'spear', 10, 64, (c) => {
-    c.fillStyle = '#8a5a2e'; c.fillRect(3.5, 12, 3, 52);
-    c.strokeStyle = OUT; c.lineWidth = 1; c.strokeRect(3.5, 12, 3, 52);
-    c.beginPath(); c.moveTo(5, 0); c.lineTo(9, 13); c.lineTo(1, 13); c.closePath();
-    fillStroke(c, lin(c, 0, 13, '#ffffff', '#a9b6c4'), 1.5);
-  });
-  tex(scene, 'bow', 18, 44, (c) => {
-    c.strokeStyle = OUT; c.lineWidth = 5;
-    c.beginPath(); c.moveTo(4, 2); c.quadraticCurveTo(22, 22, 4, 42); c.stroke();
-    c.strokeStyle = '#a8662e'; c.lineWidth = 3;
-    c.beginPath(); c.moveTo(4, 2); c.quadraticCurveTo(22, 22, 4, 42); c.stroke();
-    c.strokeStyle = '#f5f0e0'; c.lineWidth = 1;
-    c.beginPath(); c.moveTo(4, 2); c.lineTo(4, 42); c.stroke();
-  });
   tex(scene, 'arrow', 30, 6, (c) => {
     c.fillStyle = '#7a4a22'; c.fillRect(4, 2, 22, 2);
     c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(0, 0); c.lineTo(6, 3); c.lineTo(0, 6); c.closePath(); c.fill();
@@ -204,45 +85,6 @@ function makeWeapons(scene: Phaser.Scene) {
     circle(c, 11, 11, 9);
     fillStroke(c, rad(c, 11, 11, 10, '#c7c0b2', '#6d655a'), 2);
     c.fillStyle = 'rgba(0,0,0,0.18)'; circle(c, 14, 13, 2.5); c.fill(); circle(c, 8, 14, 1.8); c.fill();
-  });
-}
-
-// ---------------------------------------------------------------- siege
-function makeSiege(scene: Phaser.Scene) {
-  const wheel = (c: Ctx, x: number, y: number, r: number) => {
-    circle(c, x, y, r); fillStroke(c, '#6b3d1c', 2.5);
-    circle(c, x, y, r * 0.55); fillStroke(c, '#a8662e', 1.5);
-    c.fillStyle = '#9aa4ae'; circle(c, x, y, r * 0.22); c.fill();
-  };
-  tex(scene, 'ram_body', 84, 60, (c) => {
-    // roof (sloped hut on wheels)
-    c.beginPath();
-    c.moveTo(10, 40); c.lineTo(20, 10); c.lineTo(64, 10); c.lineTo(74, 40); c.closePath();
-    fillStroke(c, lin(c, 10, 40, '#c4733a', '#7c3d18'));
-    c.strokeStyle = 'rgba(43,29,20,0.45)'; c.lineWidth = 1.5;
-    for (let i = 0; i < 5; i++) { c.beginPath(); c.moveTo(16 + i * 2, 16 + i * 5); c.lineTo(68 - i * 2, 16 + i * 5); c.stroke(); }
-    // team strip
-    c.fillStyle = TEAM.blue.main; rr(c, 22, 6, 40, 7, 3); c.fill(); c.strokeStyle = OUT; c.lineWidth = 2; c.stroke();
-    wheel(c, 20, 46, 10); wheel(c, 64, 46, 10);
-  });
-  tex(scene, 'ram_log', 64, 18, (c) => {
-    rr(c, 2, 3, 52, 12, 6); fillStroke(c, lin(c, 3, 15, '#b9814a', '#6b3d1c'));
-    rr(c, 48, 0, 15, 18, 5); fillStroke(c, lin(c, 0, 18, '#e0e6ec', '#7a8796'));
-  });
-  tex(scene, 'cata_body', 76, 56, (c) => {
-    rr(c, 6, 22, 64, 16, 5); fillStroke(c, lin(c, 22, 38, '#b9814a', '#6b3d1c'));
-    // A-frame
-    c.beginPath(); c.moveTo(26, 30); c.lineTo(38, 6); c.lineTo(50, 30);
-    c.strokeStyle = OUT; c.lineWidth = 7; c.stroke();
-    c.strokeStyle = '#9a6234'; c.lineWidth = 4; c.stroke();
-    c.fillStyle = TEAM.blue.main; rr(c, 10, 25, 12, 8, 2); c.fill();
-    wheel(c, 16, 42, 10); wheel(c, 60, 42, 10);
-  });
-  tex(scene, 'cata_arm', 16, 58, (c) => {
-    // pivot at bottom center; bucket at top
-    rr(c, 5, 10, 6, 46, 3); fillStroke(c, '#9a6234', 2);
-    c.beginPath(); c.arc(8, 9, 8, 0, Math.PI); c.closePath();
-    fillStroke(c, '#6b3d1c', 2);
   });
 }
 
@@ -516,14 +358,8 @@ function makeFx(scene: Phaser.Scene) {
 }
 
 export function generateArt(scene: Phaser.Scene) {
-  for (const team of ['blue', 'red'] as Team[]) {
-    makeCharacter(scene, 'knight', team);
-    makeCharacter(scene, 'archer', team);
-    makeCharacter(scene, 'spearman', team);
-  }
-  makeCharacter(scene, 'defender', 'red');
+  generateGearArt(scene);
   makeWeapons(scene);
-  makeSiege(scene);
   makeCastle(scene);
   makeNature(scene);
   makeFx(scene);

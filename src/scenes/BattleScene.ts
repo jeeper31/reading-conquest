@@ -3,7 +3,8 @@ import { playMusic, playJingle, musicOn } from '../music/player';
 import { W, H, txt, button, COLORS, goTo, fadeIn, panel, tiledGrass, scatterDecor, floatText, FONT , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, persist, CASTLES, CastleDef, UNIT_ORDER, UnitType, unitStats, UNIT_DEFS } from '../state';
-import { makeUnitVisual, animateWalk, UnitVisual, VisualKind } from '../units';
+import { makeUnitVisual, animateWalk, UnitVisual, VisualKind, iconKey } from '../units';
+import { defenderGear } from '../gear';
 
 type BKind = 'wall' | 'tower' | 'keep' | 'storage';
 const FIELD_BOTTOM = 612;
@@ -213,7 +214,7 @@ export class BattleScene extends Phaser.Scene {
       bg.fillStyle(0x2b1d14, 1).fillRoundedRect(-52, -44, 104, 92, 14);
       bg.fillStyle(0xf5e6c4, 1).fillRoundedRect(-48, -40, 96, 84, 12);
       const big = t === 'ram' || t === 'catapult';
-      const icon = this.add.image(0, big ? 18 : 22, big ? (t === 'ram' ? 'ram_body' : 'cata_body') : `${t}_blue`).setOrigin(0.5, 0.9).setScale(big ? 0.85 : 1.2);
+      const icon = this.add.image(0, big ? 18 : 22, iconKey(t, 'blue')).setOrigin(0.5, big ? 0.9 : 0.92).setScale(big ? 0.85 : 1.05);
       const count = txt(this, 30, -28, `x${this.pool[t]}`, 22, '#ffffff');
       const name = txt(this, 0, 34, UNIT_DEFS[t].name.replace('Battering ', ''), 15);
       c.add([ring, bg, icon, count, name]);
@@ -278,7 +279,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private spawnUnit(type: VisualKind, team: 'blue' | 'red', x: number, y: number, drop: boolean): Unit {
-    const v = makeUnitVisual(this, type, team, type === 'defender' ? 1.1 : 1);
+    const v = makeUnitVisual(this, type, team, type === 'defender' ? 1.1 : 1, type === 'defender' ? defenderGear(this.castleIdx) : undefined);
     v.root.setPosition(x, y).setDepth(y);
     let st: { hp: number; dmg: number; range: number; speed: number; cooldown: number; structureMult: number };
     if (type === 'defender') {
@@ -495,7 +496,7 @@ export class BattleScene extends Phaser.Scene {
           tweens: [
             { angle: 90, x: 0, duration: 160 },
             { x: 26, duration: 90, ease: 'Quad.easeIn', onComplete: () => { if (!u.alive) return; sfx.hit(); this.sparks.explode(4, t.x - 10 * u.facing, hitY); this.damage(t, dmg, u); } },
-            { x: 8, angle: v.restAngle, duration: 260 },
+            { x: w.getData('x0') ?? 8, angle: v.restAngle, duration: 260 },
           ],
           onComplete: () => w.setData('busy', false),
         });
@@ -509,7 +510,7 @@ export class BattleScene extends Phaser.Scene {
             if (!u.alive) return;
             sfx.arrow();
             const d = this.dist(u, t);
-            this.projectile('arrow', u.x + 14 * u.facing, u.y - 24, t, 180 + d * 1.6, 18 + d * 0.12, () => { if (t.alive) { this.damage(t, dmg, u); this.sparks.explode(2, t.x, hitY); } });
+            this.projectile(v.gear.weapon >= 4 ? 'arrow_glow' : 'arrow', u.x + 14 * u.facing, u.y - 24, t, 180 + d * 1.6, 18 + d * 0.12, () => { if (t.alive) { this.damage(t, dmg, u); this.sparks.explode(2, t.x, hitY); } });
           },
         });
         break;
