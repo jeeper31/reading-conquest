@@ -109,5 +109,68 @@ const defeat = track({
   noise: drums('................ ................ k...............', 0.6),
 });
 
-export const TRACKS: Record<string, Track> = { camp, read, map, battle, victory, defeat };
+// ---------------------------------------------------------------------------
+// FROST REALM map — "Ice Halls": sparkly, E minor, 108 bpm.
+const frostProg = ['Em', 'C', 'Am', 'G', 'Em', 'C', 'B7', 'Em'];
+const frost = track({
+  name: 'frost', bpm: 108, loop: true, volume: 0.8, duty1: 0.125, duty2: 0.125,
+  gate: { p1: 0.85, p2: 0.4, tri: 0.9 },
+  p1: mel(`
+    B4/4 E5/4 G5/4 F#5/4 | E5/6 D5/2 B4/8 | C5/4 E5/4 G5/4 A5/4 | G5/8 E5/8
+    B5/4 A5/4 G5/4 F#5/4 | E5/4 G5/4 C6/8 | B5/6 A5/2 F#5/4 D#5/4 | E5/16`),
+  p2: arp(frostProg, 5, 2, [0, 1, 2, 3, 2, 1], 0.45),
+  tri: bass(frostProg, 2, [[0, 8], [7, 8]], 0.9),
+  noise: rep(drums('h...h...h...h.h.', 0.4), 8),
+});
+
+// DESERT SANDS map — "Shifting Sands": D minor with a desert C#, 120 bpm.
+const desertProg = ['Dm', 'Dm', 'Gm', 'A', 'Dm', 'Bb', 'A', 'Dm'];
+const desert = track({
+  name: 'desert', bpm: 120, loop: true, volume: 0.8, duty1: 0.25, duty2: 0.5,
+  gate: { p1: 0.85, p2: 0.45, tri: 0.7 },
+  p1: mel(`
+    D5/2 E5/2 F5/4 E5/2 D5/2 C#5/4 | D5/4 A4/4 D5/8 | G5/2 F5/2 E5/4 D5/4 Bb4/4 | A4/2 Bb4/2 C#5/4 E5/8
+    F5/2 G5/2 A5/4 G5/2 F5/2 E5/4 | D5/4 F5/4 Bb5/8 | A5/2 G5/2 F5/2 E5/2 C#5/4 E5/4 | D5/16`),
+  p2: arp(desertProg, 4, 4, [0, 2, 1, 2], 0.5),
+  tri: bass(desertProg, 2, [[0, 3], [0, 3], [7, 2], [0, 4], [7, 4]]),
+  noise: rep(drums('k..k..s.k.k.s...', 0.7), 8),
+});
+
+// SHADOW FORTRESS map — "Dark Fortress": brave but spooky, C minor, 132 bpm.
+const shadowProg = ['Cm', 'Ab', 'Bb', 'G', 'Cm', 'Ab', 'Fm', 'G'];
+const shadow = track({
+  name: 'shadow', bpm: 132, loop: true, volume: 0.8, duty1: 0.25, duty2: 0.125,
+  gate: { p1: 0.85, p2: 0.5, tri: 0.6 },
+  p1: mel(`
+    C5/4 Eb5/4 G5/6 F5/2 | Eb5/4 C5/4 Ab4/8 | Bb4/4 D5/4 F5/4 Bb5/4 | G5/8 B4/8
+    C5/2 C5/2 G5/4 Eb5/2 F5/2 G5/4 | Ab5/4 G5/4 Eb5/8 | F5/4 Ab5/4 C6/4 Ab5/4 | G5/8 D5/4 B4/4`),
+  p2: arp(shadowProg, 4, 2, [0, 1, 2, 1], 0.5),
+  tri: bass(shadowProg, 2, [[0, 2], [0, 2], [12, 2], [0, 2], [0, 2], [0, 2], [12, 2], [7, 2]]),
+  noise: rep(drums('k...s..kk...s...', 0.75), 8),
+});
+
+// BOSS battle — "Boss Battle!": fast and intense, E minor, 160 bpm.
+const bossProg = ['Em', 'Em', 'C', 'D', 'Em', 'Em', 'C', 'B'];
+const boss = track({
+  name: 'boss', bpm: 160, loop: true, volume: 0.85, duty1: 0.25, duty2: 0.125,
+  gate: { p1: 0.85, p2: 0.5, tri: 0.55 },
+  p1: mel(`
+    E5/2 E5/2 G5/2 E5/2 B5/4 A5/4 | G5/2 F#5/2 E5/2 D5/2 E5/8 | C5/2 E5/2 G5/2 C6/2 B5/4 G5/4 | A5/2 F#5/2 D5/4 F#5/4 A5/4
+    E6/4 D6/2 B5/2 G5/4 E5/4 | B5/2 A5/2 G5/2 F#5/2 G5/4 B5/4 | C6/4 B5/4 A5/4 G5/4 | F#5/4 A5/4 D#5/8`),
+  p2: arp(bossProg, 4, 1, [0, 1, 2, 3, 2, 1], 0.5),
+  tri: bass(bossProg, 2, [[0, 2], [12, 2], [0, 2], [12, 2], [0, 2], [12, 2], [7, 2], [12, 2]]),
+  noise: cat(rep(drums('k.h.s.h.k.k.s.h.'), 7), drums('k.h.s.h.s.ssSSSS')),
+});
+
+// CROWN jingle — grand coronation fanfare (~5 s, plays once).
+const crown = track({
+  name: 'crown', bpm: 120, loop: false, volume: 1, duty1: 0.25, duty2: 0.5,
+  gate: { p1: 0.9, p2: 0.85, tri: 0.9 },
+  p1: mel('C5/2 E5/2 G5/2 C6/6 G5/2 C6/2 | D6/4 B5/2 D6/2 E6/4 G6/4 | C6/4 G5/4 E6/8 | C6/16'),
+  p2: mel('E4/2 G4/2 C5/2 E5/6 E5/2 G5/2 | G5/4 G5/2 B5/2 C6/4 D6/4 | G5/4 E5/4 G5/8 | E5/16', 0.6),
+  tri: mel('C3/8 C3/8 | G2/8 G2/8 | F2/8 G2/8 | C2/16'),
+  noise: drums('k...s...k.s.ssss k...s...k.s.SSSS k.k.s.k.k.s.SSSS K...............'),
+});
+
+export const TRACKS: Record<string, Track> = { camp, read, map, battle, victory, defeat, frost, desert, shadow, boss, crown };
 export type TrackName = keyof typeof TRACKS;

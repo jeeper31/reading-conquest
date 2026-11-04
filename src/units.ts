@@ -4,7 +4,7 @@ import { playerGear, type UnitType } from './state';
 import { ARMOR_BULK, type Gear } from './gear';
 import { bodyKey, weaponKey, siegeKey, BODY_ORIGIN, WEAPON_ORIGIN, handPos } from './art-gear';
 
-export type VisualKind = UnitType | 'defender';
+export type VisualKind = UnitType | 'defender' | 'camel' | 'dragon';
 
 export interface UnitVisual {
   root: Phaser.GameObjects.Container;
@@ -18,18 +18,21 @@ export interface UnitVisual {
   kind: VisualKind;
   gear: Gear;
   weaponY: number; // weapon rest height (walk bob is added to this)
+  wings?: Phaser.GameObjects.Image[]; // dragon only
 }
 
 /** Texture key for a unit's icon (body only), in the given gear. */
-export function iconKey(kind: VisualKind, team: Team, gear: Gear = kind === 'defender' ? { armor: 1, weapon: 1 } : playerGear(kind)) {
+export function iconKey(kind: VisualKind, team: Team, gear: Gear = kind === 'defender' || kind === 'camel' || kind === 'dragon' ? { armor: 1, weapon: 1 } : playerGear(kind)) {
   if (kind === 'ram') return siegeKey('ram_body', gear.weapon);
-  if (kind === 'catapult') return siegeKey('cata_body', gear.weapon);
+  if (kind === 'catapult') return team === 'blue' ? siegeKey('cata_body', gear.weapon) : `cata_body_${team}`;
+  if (kind === 'camel') return 'boss_camel';
+  if (kind === 'dragon') return 'dragon_body';
   return bodyKey(kind, team, gear.armor);
 }
 
 /** gear defaults to what our troops currently wear (from upgrades); pass it for enemies or previews. */
 export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team, scale = 1, gearIn?: Gear): UnitVisual {
-  const gear = gearIn ?? (kind === 'defender' ? { armor: 1, weapon: 1 } : playerGear(kind));
+  const gear = gearIn ?? (kind === 'defender' || kind === 'camel' || kind === 'dragon' ? { armor: 1, weapon: 1 } : playerGear(kind));
   const root = scene.add.container(0, 0);
   const rig = scene.add.container(0, 0);
   const shadow = scene.add.image(0, 0, 'shadow');
@@ -41,16 +44,31 @@ export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team
   let part: Phaser.GameObjects.Image | undefined;
   let restAngle = 0;
   let weaponY = 0;
+  let wings: Phaser.GameObjects.Image[] | undefined;
 
-  if (kind === 'ram') {
+  if (kind === 'camel') {
+    shadow.setScale(2.8, 2.2);
+    body = scene.add.image(0, 0, 'boss_camel').setOrigin(0.5, 0.95);
+    weapon = scene.add.image(20, -72, 'wpn_scimitar').setOrigin(0.5, 0.85);
+    weaponY = -72; restAngle = 25;
+    weapon.setData('x0', 20); weapon.setAngle(restAngle);
+    rig.add([body, weapon]);
+  } else if (kind === 'dragon') {
+    shadow.setScale(3.2, 2.4);
+    const far = scene.add.image(-14, -66, 'dragon_wing').setOrigin(16 / 120, 82 / 90).setTint(0x8a6a7a).setAngle(-12);
+    body = scene.add.image(0, 0, 'dragon_body').setOrigin(0.5, 0.95);
+    const near = scene.add.image(-8, -60, 'dragon_wing').setOrigin(16 / 120, 82 / 90);
+    wings = [far, near];
+    rig.add([far, body, near]);
+  } else if (kind === 'ram') {
     shadow.setScale(1.8, 1.6);
     part = scene.add.image(4, -16, siegeKey('ram_log', gear.weapon)).setOrigin(0.15, 0.5);
     body = scene.add.image(0, 2, siegeKey('ram_body', gear.weapon)).setOrigin(0.5, 0.9);
     rig.add([part, body]);
   } else if (kind === 'catapult') {
     shadow.setScale(1.7, 1.5);
-    body = scene.add.image(0, 2, siegeKey('cata_body', gear.weapon)).setOrigin(0.5, 0.9);
-    part = scene.add.image(0, -30, siegeKey('cata_arm', gear.weapon)).setOrigin(0.5, 0.95);
+    body = scene.add.image(0, 2, team === 'blue' ? siegeKey('cata_body', gear.weapon) : `cata_body_${team}`).setOrigin(0.5, 0.9);
+    part = scene.add.image(0, -30, siegeKey('cata_arm', team === 'blue' ? gear.weapon : 2)).setOrigin(0.5, 0.95);
     restAngle = -55;
     part.setAngle(restAngle);
     rig.add([part, body]);
@@ -73,11 +91,26 @@ export function makeUnitVisual(scene: Phaser.Scene, kind: VisualKind, team: Team
     rig.add(weapon);
   }
   root.setScale(scale);
-  return { root, rig, body, weapon, part, feet, shadow, restAngle, kind, gear, weaponY };
+  return { root, rig, body, weapon, part, feet, shadow, restAngle, kind, gear, weaponY, wings };
 }
 
 /** Advance a walk cycle. phase in radians. */
 export function animateWalk(v: UnitVisual, phase: number, moving: boolean) {
+  if (v.kind === 'dragon') {
+    // hovers and flaps all the time; flaps faster when flying forward
+    const f = Math.sin(phase * (moving ? 1.6 : 1.1));
+    v.rig.y = -26 + f * 6;
+    v.shadow.setScale(3.2 - f * 0.2, 2.4 - f * 0.15);
+    v.wings?.forEach((w, i) => w.setScale(1, 0.72 + 0.32 * f * (i ? 1 : 0.9)));
+    return;
+  }
+  if (v.kind === 'camel') {
+    const s = Math.sin(phase * (moving ? 1 : 0.4));
+    v.body.y = -Math.abs(s) * (moving ? 5 : 1.5);
+    v.body.rotation = moving ? s * 0.04 : 0;
+    if (v.weapon && !v.weapon.getData('busy')) v.weapon.y = v.weaponY + v.body.y;
+    return;
+  }
   if (v.kind === 'ram' || v.kind === 'catapult') {
     v.body.y = 2 - (moving ? Math.abs(Math.sin(phase * 2)) * 2 : 0);
     v.body.rotation = moving ? Math.sin(phase * 2) * 0.03 : 0;

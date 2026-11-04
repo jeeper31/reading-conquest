@@ -1,6 +1,7 @@
 // Procedural, canvas-drawn art. Everything is generated at boot — no image files needed.
 import Phaser from 'phaser';
 import { generateGearArt } from './art-gear';
+import { generateKingdomArt } from './art-kingdoms';
 
 type Ctx = CanvasRenderingContext2D;
 export const OUT = '#2b1d14';
@@ -9,6 +10,10 @@ export type Ctx2 = CanvasRenderingContext2D;
 export const TEAM = {
   blue: { main: '#3d7be0', dark: '#24509e', light: '#7fb0ff' },
   red: { main: '#d8443a', dark: '#8f2220', light: '#ff8a7a' },
+  // enemy teams of the later kingdoms
+  ice: { main: '#7fcbe8', dark: '#2f7aa0', light: '#e6f9ff' },
+  sand: { main: '#e0a030', dark: '#9a5a14', light: '#ffe0a0' },
+  shadow: { main: '#7a3aa8', dark: '#341250', light: '#c08ae8' },
 };
 export type Team = keyof typeof TEAM;
 
@@ -65,7 +70,7 @@ export function rad(c: Ctx, x: number, y: number, r: number, a: string, b: strin
 }
 
 // Seeded RNG so textures look the same every run
-function rng(seed: number) {
+export function rng(seed: number) {
   return () => {
     seed = (seed * 16807) % 2147483647;
     return (seed - 1) / 2147483646;
@@ -363,4 +368,5 @@ export function generateArt(scene: Phaser.Scene) {
   makeCastle(scene);
   makeNature(scene);
   makeFx(scene);
+  generateKingdomArt(scene);
 }

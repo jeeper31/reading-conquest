@@ -134,28 +134,29 @@ export function floatText(scene: Phaser.Scene, x: number, y: number, s: string, 
   return t;
 }
 
-export function tiledGrass(scene: Phaser.Scene, tint?: number) {
-  const ts = scene.add.tileSprite(W / 2, H / 2, W, H, 'grass').setDepth(-10000);
+export function tiledGrass(scene: Phaser.Scene, tint?: number, key = 'grass') {
+  const ts = scene.add.tileSprite(W / 2, H / 2, W, H, key).setDepth(-10000);
   if (tint) ts.setTint(tint);
   return ts;
 }
 
 /** Scatter decorative trees/rocks avoiding a rectangle list. */
-export function scatterDecor(scene: Phaser.Scene, count: number, avoid: Phaser.Geom.Rectangle[], seed = 1) {
+const TALL = new Set(['tree', 'pine', 'pine_snow', 'palm', 'cactus', 'dead_tree', 'crystal', 'snowman']);
+export function scatterDecor(scene: Phaser.Scene, count: number, avoid: Phaser.Geom.Rectangle[], seed = 1, keys = ['tree', 'pine', 'bush', 'rock', 'flowers', 'tree', 'bush', 'flowers']) {
   const rnd = new Phaser.Math.RandomDataGenerator([String(seed)]);
-  const keys = ['tree', 'pine', 'bush', 'rock', 'flowers', 'tree', 'bush', 'flowers'];
   let placed = 0, tries = 0;
   while (placed < count && tries++ < count * 20) {
     const x = rnd.between(20, W - 20), y = rnd.between(30, H - 10);
     const k = rnd.pick(keys);
-    const tall = k === 'tree' || k === 'pine';
+    const tall = TALL.has(k);
     // check the base and (for trees) the canopy so nothing pokes over UI or castles
     const probes = tall ? [[x, y], [x, y - 70], [x - 30, y - 40], [x + 30, y - 40]] : [[x, y], [x, y - 20]];
     if (probes.some(([px, py]) => py < 80 || avoid.some((r) => r.contains(px, py)))) continue;
     const img = scene.add.image(x, y, k).setOrigin(0.5, 0.92).setDepth(y);
     const s = rnd.realInRange(0.8, 1.15);
     img.setScale(s);
-    if (k === 'tree' || k === 'pine') scene.tweens.add({ targets: img, scaleX: s * 1.03, duration: 1800 + rnd.between(0, 900), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (k === 'ember_vent') scene.tweens.add({ targets: img, alpha: 0.6, duration: 700 + rnd.between(0, 500), yoyo: true, repeat: -1 });
+    if (k === 'tree' || k === 'pine' || k === 'pine_snow' || k === 'palm') scene.tweens.add({ targets: img, scaleX: s * 1.03, duration: 1800 + rnd.between(0, 900), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     placed++;
   }
 }

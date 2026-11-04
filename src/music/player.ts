@@ -86,7 +86,7 @@ export function playMusic(name: TrackName) {
 }
 
 /** Play a one-shot jingle (victory/defeat), then optionally continue with `then`. */
-export function playJingle(name: 'victory' | 'defeat', then?: TrackName) {
+export function playJingle(name: 'victory' | 'defeat' | 'crown', then?: TrackName) {
   wanted = name; after = then ?? null;
   onAudioReady((ctx) => { ensureGraph(ctx); if (wanted === name) start(ctx, name); });
 }

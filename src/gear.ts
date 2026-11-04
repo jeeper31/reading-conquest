@@ -15,48 +15,52 @@ export interface UpgradeDef {
 
 export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
   armor: {
-    id: 'armor', name: 'Armor', blurb: '+20% health for all troops', costs: [80, 180, 320, 500],
+    id: 'armor', name: 'Armor', blurb: '+20% health for all troops', costs: [80, 180, 320, 500, 850],
     tiers: [
       { name: 'Cloth Tunic', short: 'Cloth' },
       { name: 'Leather Armor', short: 'Leather' },
       { name: 'Chainmail', short: 'Chainmail' },
       { name: 'Steel Plate', short: 'Steel' },
       { name: 'Royal Gold Armor', short: 'Royal Gold' },
+      { name: 'Dragon Scale Armor', short: 'Dragon Scale' },
     ],
   },
   sword: {
-    id: 'sword', name: 'Weapons', blurb: '+25% knight & spear damage', costs: [80, 180, 320, 500],
+    id: 'sword', name: 'Weapons', blurb: '+25% knight & spear damage', costs: [80, 180, 320, 500, 850],
     tiers: [
       { name: 'Wooden Club', short: 'Club' },
       { name: 'Dagger', short: 'Dagger' },
       { name: 'Iron Sword', short: 'Iron' },
       { name: 'Steel Longsword', short: 'Longsword' },
       { name: 'Legend Sword', short: 'Legend' },
+      { name: 'Dragonfire Blade', short: 'Dragonfire' },
     ],
   },
   bow: {
-    id: 'bow', name: 'Bows', blurb: '+25% archer damage, +8% range', costs: [80, 180, 320, 500],
+    id: 'bow', name: 'Bows', blurb: '+25% archer damage, +8% range', costs: [80, 180, 320, 500, 850],
     tiers: [
       { name: 'Twig Bow', short: 'Twig' },
       { name: 'Hunting Bow', short: 'Hunting' },
       { name: 'Recurve Bow', short: 'Recurve' },
       { name: 'Steel Longbow', short: 'Steel' },
       { name: 'Golden Star Bow', short: 'Star' },
+      { name: 'Phoenix Bow', short: 'Phoenix' },
     ],
   },
   siege: {
-    id: 'siege', name: 'Siege Works', blurb: '+30% ram & catapult damage', costs: [150, 300, 500],
+    id: 'siege', name: 'Siege Works', blurb: '+30% ram & catapult damage', costs: [150, 300, 500, 800],
     tiers: [
       { name: 'Rough Wood', short: 'Wood' },
       { name: 'Iron Bands', short: 'Iron' },
       { name: 'Steel Plates', short: 'Steel' },
       { name: 'Royal Gold Trim', short: 'Gold' },
+      { name: 'Dragon Iron', short: 'Dragon Iron' },
     ],
   },
 };
 
 /** Spearmen use the Weapons track too; their spears get their own names. */
-export const SPEAR_TIERS = ['Pointy Stick', 'Bronze Spear', 'Iron Spear', 'Steel Halberd', 'Dragon Lance'];
+export const SPEAR_TIERS = ['Pointy Stick', 'Bronze Spear', 'Iron Spear', 'Steel Halberd', 'Dragon Lance', 'Phoenix Spear'];
 
 export const UPGRADE_ORDER: UpgradeId[] = ['armor', 'sword', 'bow', 'siege'];
 
@@ -73,14 +77,22 @@ export function sanitizeUpgrades(raw: unknown): Record<UpgradeId, number> {
   return out;
 }
 
-/** Gear a unit wears. armor 0-4, weapon 0-4 (siege uses weapon 0-3 for its trim). */
+/** Gear a unit wears. armor 0-5, weapon 0-5 (siege uses weapon 0-4 for its trim). */
 export interface Gear { armor: number; weapon: number }
 
-/** Enemy guards get tougher-looking gear at harder castles (castle index 0-5). */
-export function defenderGear(castleIdx: number): Gear {
-  const t = [1, 1, 2, 2, 3, 4][Math.max(0, Math.min(5, Math.floor(castleIdx) || 0))];
+/** Gear the enemy guards wear at each castle of each kingdom (they get tougher-looking as you go). */
+export const GUARD_GEAR = [
+  [1, 1, 2, 2, 3, 4], // Green Kingdom
+  [2, 2, 3, 3, 4, 4], // Frost Realm
+  [3, 3, 4, 4, 4, 5], // Desert Sands
+  [4, 4, 5, 5, 5, 5], // Shadow Fortress
+];
+/** Enemy guards get tougher-looking gear at harder castles (castle index 0-5, kingdom 0-3). */
+export function defenderGear(castleIdx: number, kingdom = 0): Gear {
+  const row = GUARD_GEAR[Math.max(0, Math.min(GUARD_GEAR.length - 1, Math.floor(kingdom) || 0))];
+  const t = row[Math.max(0, Math.min(5, Math.floor(castleIdx) || 0))];
   return { armor: t, weapon: t };
 }
 
 /** How much bigger the body is drawn at each armor tier (silhouette grows with the armor). */
-export const ARMOR_BULK = [1, 1.05, 1.1, 1.17, 1.24];
+export const ARMOR_BULK = [1, 1.05, 1.1, 1.17, 1.24, 1.3];
