@@ -106,5 +106,18 @@ export const sfx = {
   },
   defeat() { [392, 349, 311, 262].forEach((f, i) => tone(f, 0.4, 'triangle', 0.16, i * 0.25)); },
   star(i: number) { tone(784 + i * 196, 0.35, 'square', 0.12); tone(1568 + i * 392, 0.4, 'sine', 0.1, 0.05); },
+  /** Streak switched on: a quick 8-bit power-up fanfare. */
+  streak() {
+    const run = [523, 659, 784, 1047, 784, 1047, 1319, 1568];
+    run.forEach((f, i) => tone(f, 0.11, 'square', 0.1, i * 0.065));
+    [262, 330, 392, 523].forEach((f, i) => tone(f, 0.14, 'triangle', 0.16, i * 0.13));
+    // little victory trill on top
+    for (let i = 0; i < 6; i++) tone(i % 2 ? 2093 : 1760, 0.07, 'square', 0.07, 0.55 + i * 0.06);
+    tone(1047, 0.5, 'triangle', 0.14, 0.55); tone(523, 0.5, 'triangle', 0.14, 0.55);
+  },
+  /** A coin with a little extra sparkle while the 2x is on. */
+  coin2x() { tone(988, 0.07, 'square', 0.11); tone(1319, 0.08, 'square', 0.11, 0.06); tone(1760, 0.22, 'square', 0.09, 0.12); },
+  /** Streak ended: soft and friendly, not a buzzer. */
+  streakEnd() { tone(523, 0.16, 'triangle', 0.1); tone(440, 0.16, 'triangle', 0.1, 0.12); tone(392, 0.3, 'triangle', 0.09, 0.24); },
   horn() { tone(196, 0.9, 'sawtooth', 0.1, 0, 220); tone(294, 0.9, 'sawtooth', 0.08, 0.05, 330); },
 };

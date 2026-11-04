@@ -74,6 +74,7 @@ export interface SaveData {
   enabledLevels: string[];
   totalRead: number;
   bestStreak: number;
+  streak: number; // current reading streak (kept between visits; ends when a word is failed)
   heroName: string;
 }
 
@@ -92,6 +93,7 @@ function fresh(): SaveData {
     enabledLevels: [...DEFAULT_ENABLED_LEVELS],
     totalRead: 0,
     bestStreak: 0,
+    streak: 0,
     heroName: 'Sir Reader',
   };
 }

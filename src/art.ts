@@ -494,6 +494,21 @@ function makeFx(scene: Phaser.Scene) {
     rr(c, 6, 22, 36, 30, 6); fillStroke(c, lin(c, 22, 52, '#ffd25a', '#c98a10'), 3);
     c.fillStyle = OUT; circle(c, 24, 34, 4); c.fill(); c.fillRect(22, 34, 4, 9);
   });
+  // Streak flame (lit) and a cold grey one for "no streak yet"
+  const flame = (c: Ctx, outer: [string, string], inner: [string, string]) => {
+    c.beginPath(); c.moveTo(32, 4);
+    c.bezierCurveTo(40, 18, 56, 26, 54, 46); c.bezierCurveTo(53, 60, 42, 66, 32, 66);
+    c.bezierCurveTo(22, 66, 10, 60, 10, 46); c.bezierCurveTo(10, 34, 18, 30, 20, 20);
+    c.bezierCurveTo(24, 26, 26, 30, 27, 34); c.bezierCurveTo(28, 22, 30, 14, 32, 4); c.closePath();
+    fillStroke(c, lin(c, 4, 66, outer[0], outer[1]), 3.5);
+    c.beginPath(); c.moveTo(32, 30);
+    c.bezierCurveTo(38, 38, 44, 44, 43, 52); c.bezierCurveTo(42, 60, 36, 62, 32, 62);
+    c.bezierCurveTo(27, 62, 21, 59, 21, 52); c.bezierCurveTo(21, 44, 28, 40, 32, 30); c.closePath();
+    c.fillStyle = lin(c, 30, 62, inner[0], inner[1]); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.55)'; ellipse(c, 26, 50, 3, 5); c.fill();
+  };
+  tex(scene, 'flame', 64, 70, (c) => flame(c, ['#ffb43a', '#e0301e'], ['#fff6b0', '#ffc93a']));
+  tex(scene, 'flame_off', 64, 70, (c) => flame(c, ['#a6adb5', '#6b737c'], ['#dfe3e8', '#b8bfc7']));
   tex(scene, 'crown', 48, 40, (c) => {
     c.beginPath(); c.moveTo(4, 34); c.lineTo(4, 10); c.lineTo(14, 20); c.lineTo(24, 4); c.lineTo(34, 20); c.lineTo(44, 10); c.lineTo(44, 34); c.closePath();
     fillStroke(c, lin(c, 4, 34, '#fff3a0', '#e0a21a'), 3);

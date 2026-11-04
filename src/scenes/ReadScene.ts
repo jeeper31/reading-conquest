@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playMusic, setDuck } from '../music/player';
-import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button , soundToggles } from '../ui';
+import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button, soundToggles, floatText } from '../ui';
 import { sfx, unlockAudio } from '../audio';
 import { save, persist, pickWord, recordWord, GOLD_PER_WORD } from '../state';
 import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk, getStrictness, setStrictness, LISTEN_MS, Strictness } from '../speech';
@@ -8,6 +8,7 @@ import { WORD_LEVELS } from '../data/words';
 import { SoundOut } from '../soundout';
 import { breakdown, chunkClip } from '../data/phonics';
 import { preload } from '../phonics-audio';
+import { onCorrect, onMiss, onSkip, streakActive, STREAK_TO_START, STREAK_MULT } from '../streak';
 
 const MIC_LABELS: Record<MicState, [string, number]> = {
   unknown: ['Mic: tap the mic to start', 0x6b7a8a],
@@ -33,7 +34,9 @@ export class ReadScene extends Phaser.Scene {
   private listening = false;
   private tries = 0;
   private streak = 0;
-  private streakText!: Phaser.GameObjects.Text;
+  private failedWord = false; // this word got 3 wrong tries (streak already ended)
+  private streakHud!: Phaser.GameObjects.Container;
+  private streakFlame?: Phaser.GameObjects.Image;
   private sessionText!: Phaser.GameObjects.Text;
   private sessionCount = 0;
   private gold!: ReturnType<typeof goldHud>;
@@ -52,7 +55,7 @@ export class ReadScene extends Phaser.Scene {
     fadeIn(this);
     playMusic('read');
     soundToggles(this, 372, 42);
-    this.busy = false; this.listening = false; this.streak = 0; this.sessionCount = 0; this.tries = 0;
+    this.busy = false; this.listening = false; this.streak = save.streak || 0; this.sessionCount = 0; this.tries = 0;
     // Sky + hills backdrop
     const g = this.add.graphics();
     g.fillGradientStyle(0x6ec6ff, 0x6ec6ff, 0xbfe8ff, 0xbfe8ff, 1).fillRect(0, 0, W, H);
@@ -71,7 +74,8 @@ export class ReadScene extends Phaser.Scene {
     button(this, 90, 42, 150, 58, 'Camp', COLORS.blue, () => { this.listener.stop(); goTo(this, 'Camp'); }, { fontSize: 26 });
     button(this, 248, 42, 140, 58, 'Words', COLORS.purple, () => this.openSettings(), { fontSize: 24 });
     this.gold = goldHud(this);
-    this.streakText = txt(this, W / 2, 40, '', 30, '#ffe14d');
+    this.streakHud = this.add.container(W / 2 + 40, 40).setDepth(40);
+    this.updateStreakHud();
     this.sessionText = txt(this, W - 165, 92, 'Read today: 0', 20);
     this.micChip = this.add.container(W / 2, 92);
     this.updateMicChip();
@@ -130,6 +134,7 @@ export class ReadScene extends Phaser.Scene {
     this.events.once('shutdown', () => { this.soundOut?.close(); this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
 
     (window as any).__soundOut = (w?: string) => this.openSoundOut(w);
+    (window as any).__streakBanner = () => this.showStreakBanner();
     this.nextWord();
   }
 
@@ -160,6 +165,7 @@ export class ReadScene extends Phaser.Scene {
   private nextWord() {
     this.word = pickWord(this.word);
     this.tries = 0;
+    this.failedWord = false;
     this.busy = false;
     this.wordText.setText(this.word);
     const fit = Math.min(1, 640 / Math.max(1, this.wordText.width));
@@ -170,7 +176,6 @@ export class ReadScene extends Phaser.Scene {
     const ch = breakdown(this.word);
     if (ch) preload(this.word, ch.filter((c) => c.sounds.length).map(chunkClip));
     this.hintText.setText(speechSupported ? 'Tap the red button (or press Space) and read the word!' : 'Read the word out loud to a grown-up!');
-    this.streakText.setText(this.streak >= 2 ? `${this.streak} in a row!` : '');
   }
 
   update() {
@@ -247,18 +252,23 @@ export class ReadScene extends Phaser.Scene {
     this.listener.stop();
     this.setListening(false);
     if (this.tries === 0) recordWord(this.word, true);
-    this.streak++;
+    const r = onCorrect(this.streak, GOLD_PER_WORD, this.failedWord);
+    this.streak = r.streak;
+    const earned = r.earned;
     this.sessionCount++;
     save.totalRead++;
+    save.streak = this.streak;
     save.bestStreak = Math.max(save.bestStreak, this.streak);
-    let earned = GOLD_PER_WORD;
-    const bonus = this.streak % 5 === 0;
-    if (bonus) earned += 20;
     save.gold += earned;
     persist();
     sfx.cheer();
+    this.updateStreakHud(true);
+    if (r.started) this.time.delayedCall(450, () => this.showStreakBanner());
     this.heardText.setText(heard.startsWith('(') ? '' : `I heard: "${heard}"`);
-    this.hintText.setText(bonus ? `AMAZING! ${this.streak} in a row - bonus gold!` : Phaser.Utils.Array.GetRandom(['Great reading!', 'You got it!', 'Awesome!', 'Super job!', 'Well done, knight!']));
+    const praise = Phaser.Utils.Array.GetRandom(['Great reading!', 'You got it!', 'Awesome!', 'Super job!', 'Well done, knight!']);
+    this.hintText.setText(r.milestone ? `AMAZING! ${this.streak} in a row - bonus gold!`
+      : r.started ? `${STREAK_TO_START} in a row! Now every word pays ${STREAK_MULT}x coins!`
+      : r.mult > 1 ? `${praise} ${STREAK_MULT}x coins!` : praise);
     this.sessionText.setText(`Read today: ${this.sessionCount}`);
     this.wordText.setColor('#1f8a2e');
     const check = this.add.image(W / 2 + 330, 170, 'check').setScale(0).setDepth(60);
@@ -272,12 +282,22 @@ export class ReadScene extends Phaser.Scene {
       const c = this.add.image(W / 2 + Phaser.Math.Between(-120, 120), 300 + Phaser.Math.Between(-40, 40), 'coin').setDepth(70).setScale(1.3);
       this.tweens.add({
         targets: c, x: this.gold.coin.x, y: this.gold.coin.y, scale: 0.8, duration: 650, delay: 150 + i * 70, ease: 'Cubic.easeIn',
-        onComplete: () => { c.destroy(); sfx.coin(); if (i === n - 1) this.gold.update(); },
+        onComplete: () => { c.destroy(); if (r.mult > 1) sfx.coin2x(); else sfx.coin(); if (i === n - 1) this.gold.update(); },
       });
     }
-    const plus = txt(this, W / 2, 140, `+${earned}`, 48, '#ffe14d').setDepth(80).setScale(0);
-    this.tweens.add({ targets: plus, scale: 1, y: 120, duration: 400, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: plus, alpha: 0, delay: 500, duration: 300, onComplete: () => plus.destroy() }) });
-    this.time.delayedCall(1700, () => {
+    // "+20" with a "2x" badge next to it while the streak is on
+    const plus = this.add.container(W / 2, 140).setDepth(80).setScale(0);
+    const pt = txt(this, 0, 0, `+${earned}`, 48, '#ffe14d');
+    plus.add(pt);
+    if (r.mult > 1) {
+      pt.setX(-38);
+      const badge = this.multBadge(pt.width / 2 + 8, 0, 0.9);
+      plus.add(badge);
+      this.tweens.add({ targets: badge, angle: { from: -14, to: 10 }, duration: 260, yoyo: true, repeat: 2 });
+    }
+    (window as any).__lastPayout = { earned, mult: r.mult, streak: this.streak };
+    this.tweens.add({ targets: plus, scale: 1, y: 120, duration: 400, ease: 'Back.easeOut', onComplete: () => this.tweens.add({ targets: plus, alpha: 0, delay: r.mult > 1 ? 800 : 500, duration: 300, onComplete: () => plus.destroy() }) });
+    this.time.delayedCall(r.started ? 2900 : 1700, () => {
       check.destroy();
       this.wordText.setColor('#2b1d14');
       this.nextWord();
@@ -287,14 +307,15 @@ export class ReadScene extends Phaser.Scene {
   private wrong(heard: string) {
     if (this.tries === 0) recordWord(this.word, false);
     this.tries++;
-    this.streak = 0;
-    this.streakText.setText('');
+    const m = onMiss(this.streak, this.tries);
+    if (m.failed) this.failedWord = true;
+    if (m.broke) this.endStreak();
     sfx.tryAgain();
     this.heardText.setText(`I heard: "${heard}"`);
     this.tweens.add({ targets: this.card, x: { from: W / 2 - 14, to: W / 2 }, duration: 320, ease: 'Elastic.easeOut' });
     if (this.tries >= 2) {
       // Second miss: open the sound-it-out tiles and blend the word for him
-      this.hintText.setText("Let's sound it out together!");
+      this.hintText.setText(m.broke ? "New streak next word! Let's sound this one out." : "Let's sound it out together!");
       this.time.delayedCall(700, () => this.openSoundOut(this.word, true));
     } else {
       // First miss: offer help
@@ -307,8 +328,123 @@ export class ReadScene extends Phaser.Scene {
     if (this.busy) return;
     this.listener.stop();
     this.setListening(false);
-    this.streak = 0;
+    if (onSkip(this.streak).broke) this.endStreak();
     this.nextWord();
+  }
+
+  /** Gentle reset: the flame puffs out, a soft tune, and an encouraging word. No buzzer, no lost coins. */
+  private endStreak() {
+    const was = this.streak;
+    this.streak = 0;
+    save.streak = 0;
+    persist();
+    this.time.delayedCall(350, () => sfx.streakEnd());
+    const fx = this.streakFlame;
+    if (fx) {
+      const puff = this.add.image(this.streakHud.x + fx.x, this.streakHud.y + fx.y, 'puff').setDepth(45).setScale(0.4).setTint(0xcfd5db);
+      this.tweens.add({ targets: puff, y: puff.y - 34, scale: 0.9, alpha: 0, duration: 700, onComplete: () => puff.destroy() });
+    }
+    this.updateStreakHud();
+    if (was >= 2) floatText(this, this.streakHud.x, this.streakHud.y + 70, `Streak over (${was}) - start a new one!`, '#ffffff', 20);
+  }
+
+  /** Red-and-gold "2x" medal. */
+  private multBadge(x: number, y: number, s = 1) {
+    const c = this.add.container(x, y).setScale(s);
+    const g = this.add.graphics();
+    g.fillStyle(0x2b1d14, 1).fillCircle(0, 3, 33);
+    g.fillStyle(0xf2c230, 1).fillCircle(0, 0, 31);
+    g.fillStyle(0xe0301e, 1).fillCircle(0, 0, 25);
+    g.fillStyle(0xffffff, 0.35).fillEllipse(0, -12, 34, 14);
+    c.add(g);
+    c.add(txt(this, 0, 1, `${STREAK_MULT}x`, 28, '#ffffff'));
+    return c;
+  }
+
+  /** Flame + number, pips toward the 2x, then a pulsing "2x COINS" medal once the streak is on. */
+  private updateStreakHud(pop = false) {
+    const c = this.streakHud;
+    c.each((o: Phaser.GameObjects.GameObject) => this.tweens.killTweensOf(o));
+    c.removeAll(true);
+    const on = streakActive(this.streak);
+    const w = 270, h = 54;
+    const g = this.add.graphics();
+    g.fillStyle(0x2b1d14, 0.85).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    if (on) g.lineStyle(4, 0xffc93a, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    c.add(g);
+    const lit = this.streak > 0;
+    const flame = this.add.image(-w / 2 + 30, -4, lit ? 'flame' : 'flame_off').setScale(on ? 0.78 : 0.66);
+    this.streakFlame = flame;
+    c.add(flame);
+    if (lit) this.tweens.add({ targets: flame, scaleY: flame.scaleY * 1.12, scaleX: flame.scaleX * 0.94, duration: on ? 220 : 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const num = txt(this, -w / 2 + 72, 0, String(this.streak), 34, lit ? '#ffe14d' : '#b8bfc7');
+    c.add(num);
+    if (on) {
+      const badge = this.add.container(45, 0);
+      const bg = this.add.graphics();
+      bg.fillStyle(0xe0301e, 1).fillRoundedRect(-68, -19, 136, 38, 19);
+      bg.fillStyle(0xffffff, 0.25).fillRoundedRect(-60, -16, 120, 12, 6);
+      badge.add([bg, txt(this, 0, 0, `${STREAK_MULT}x COINS`, 24, '#ffffff')]);
+      c.add(badge);
+      this.tweens.add({ targets: badge, scale: 1.08, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    } else {
+      // three pips: how many more words until the 2x
+      for (let i = 0; i < STREAK_TO_START; i++) {
+        const done = i < this.streak;
+        const pip = this.add.graphics({ x: -8 + i * 34, y: 0 });
+        pip.fillStyle(0x000000, 0.4).fillCircle(0, 2, 12);
+        pip.fillStyle(done ? 0xff8a1e : 0x5a4a3c, 1).fillCircle(0, 0, 11);
+        if (done) pip.fillStyle(0xffe14d, 1).fillCircle(0, 0, 5);
+        c.add(pip);
+      }
+      c.add(txt(this, 102, 0, `${STREAK_MULT}x`, 24, '#8a7a6a'));
+    }
+    if (pop) this.tweens.add({ targets: c, scale: { from: 1.25, to: 1 }, duration: 300, ease: 'Back.easeOut' });
+  }
+
+  /** Big "STREAK! 2x COINS" ribbon when the streak switches on. */
+  private showStreakBanner() {
+    sfx.streak();
+    const c = this.add.container(W / 2, 250).setDepth(300).setScale(0);
+    const g = this.add.graphics();
+    const rw = 680, rh = 150;
+    // ribbon tails
+    for (const sx of [-1, 1]) {
+      g.fillStyle(0x2b1d14, 1).fillPoints([
+        { x: sx * (rw / 2 - 40), y: -rh / 2 + 34 }, { x: sx * (rw / 2 + 70), y: -rh / 2 + 34 }, { x: sx * (rw / 2 + 36), y: 18 },
+        { x: sx * (rw / 2 + 70), y: rh / 2 + 4 }, { x: sx * (rw / 2 - 40), y: rh / 2 + 4 },
+      ].map((p) => new Phaser.Geom.Point(p.x, p.y)), true);
+      g.fillStyle(0xa82a22, 1).fillPoints([
+        { x: sx * (rw / 2 - 40), y: -rh / 2 + 40 }, { x: sx * (rw / 2 + 60), y: -rh / 2 + 40 }, { x: sx * (rw / 2 + 28), y: 18 },
+        { x: sx * (rw / 2 + 60), y: rh / 2 - 2 }, { x: sx * (rw / 2 - 40), y: rh / 2 - 2 },
+      ].map((p) => new Phaser.Geom.Point(p.x, p.y)), true);
+    }
+    g.fillStyle(0x2b1d14, 1).fillRoundedRect(-rw / 2 - 5, -rh / 2 - 5, rw + 10, rh + 14, 30);
+    g.fillStyle(0xf2c230, 1).fillRoundedRect(-rw / 2, -rh / 2, rw, rh, 26);
+    g.fillStyle(0xe0301e, 1).fillRoundedRect(-rw / 2 + 10, -rh / 2 + 10, rw - 20, rh - 20, 20);
+    g.fillStyle(0xffffff, 0.22).fillRoundedRect(-rw / 2 + 20, -rh / 2 + 16, rw - 40, 22, 11);
+    c.add(g);
+    const fl = this.add.image(-rw / 2 + 62, -6, 'flame').setScale(1.25);
+    const fr = this.add.image(rw / 2 - 62, -6, 'flame').setScale(1.25).setFlipX(true);
+    c.add([fl, fr]);
+    for (const f of [fl, fr]) this.tweens.add({ targets: f, scaleY: 1.42, scaleX: 1.15, duration: 180, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    c.add(txt(this, 0, -26, 'STREAK!', 72, '#ffe14d'));
+    const sub = this.add.container(0, 40);
+    const sc = this.add.image(-112, 0, 'coin').setScale(1.4);
+    const st = txt(this, 14, 0, `${STREAK_MULT}x COINS!`, 40, '#ffffff');
+    sub.add([sc, st]);
+    c.add(sub);
+    this.tweens.add({ targets: c, scale: 1, angle: { from: -8, to: 0 }, duration: 520, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: sub, scale: 1.1, duration: 300, yoyo: true, repeat: 3, delay: 500 });
+    this.confetti.explode(50, W / 2 - 300, 250);
+    this.confetti.explode(50, W / 2 + 300, 250);
+    const sparks = this.add.particles(W / 2, 250, 'spark', {
+      lifespan: 900, speed: { min: 180, max: 420 }, scale: { start: 1.3, end: 0 }, rotate: { min: 0, max: 360 }, emitting: false,
+    }).setDepth(301);
+    sparks.explode(36);
+    this.time.delayedCall(2100, () => {
+      this.tweens.add({ targets: c, y: 190, alpha: 0, scale: 0.85, duration: 350, ease: 'Cubic.easeIn', onComplete: () => { c.destroy(); sparks.destroy(); } });
+    });
   }
 
   /** Small gear (grown-ups): how picky the microphone is. */
