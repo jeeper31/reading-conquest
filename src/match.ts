@@ -16,6 +16,9 @@ const HOMOPHONE_GROUPS: string[][] = [
   ['which', 'witch'], ['way', 'weigh'], ['some', 'sum'], ['been', 'bin'], ['you', 'u'], ['why', 'y'],
   ['oh', 'o', 'owe'], ['eye', 'i', 'aye'], ['tea', 'tee', 't'], ['pea', 'pee', 'p'], ['jay', 'j'],
   ['cue', 'queue', 'q'], ['ex', 'x'], ['gee', 'g'], ['dee', 'd'], ['kay', 'k'], ['are', 'r'],
+  // later-kingdom words
+  ['tail', 'tale'], ['sail', 'sale'], ['road', 'rode', 'rowed'], ['feet', 'feat'], ['rain', 'rein', 'reign'],
+  ['made', 'maid'], ['seed', 'cede'], ['home', 'ohm'], ['both', 'boath'], ['very', 'vary'], ['tree', '3 e'],
   ['zero', '0'], ['three', '3'], ['five', '5'], ['six', '6'], ['seven', '7'], ['nine', '9'], ['ten', '10'],
 ];
 
@@ -57,6 +60,15 @@ const MISHEARD: Record<string, string[]> = {
   wig: ['week', 'wigg'], web: ['webb', 'wed'], zip: ['sip', 'zipp'], fox: ['fax', 'fogs', 'fux', 'foxx'],
   him: ['hymn', 'hem'], ask: ['asc', 'asked'], let: ['lett', 'led'], walk: ['wok', 'woke'],
   ran: ['rann', 'rand'], saw: ['sa', 'saul'],
+  // later kingdoms (blends, vowel teams, two-syllable words)
+  ship: ['chip', 'sheep'], chin: ['shin', 'chen'], chop: ['shop', 'chap'], thin: ['fin', 'tin'], bath: ['bat', 'bad', 'baff'],
+  frog: ['fog', 'frock'], sled: ['slid', 'slayed'], crab: ['grab', 'crap'], swim: ['swimm'], step: ['stepp'],
+  kite: ['kate', 'kit'], bike: ['bake', 'like'], cave: ['kave'], rope: ['robe'], goat: ['go'], boat: ['vote', 'bow'],
+  green: ['greene', 'grin'], sleep: ['slip'], cold: ['called', 'coal', 'code'], many: ['manny', 'mini', 'money'],
+  hotdog: ['hot dogs', 'hot dawg'], sunset: ['sunsets', 'sun sit'], laptop: ['lap top', 'labtop'], zigzag: ['zig zag'],
+  napkin: ['nap can', 'nap kin'], picnic: ['pick nick', 'pic nic'], basket: ['bask it', 'basket ball'],
+  rabbit: ['rabid', 'rab it'], kitten: ['kitchen', 'kitty'], dragon: ['dragons', 'drag on'], robot: ['row bot', 'robots'],
+  tiger: ['tigger', 'tigers'],
 };
 
 const NUM_WORDS: Record<string, string> = {
@@ -83,7 +95,7 @@ export function exactForms(target: string): Set<string> {
 }
 
 export function misheardForms(target: string): Set<string> {
-  return new Set((MISHEARD[normalize(target)] || []).map(normalize));
+  return new Set((MISHEARD[normalize(target)] || []).map((w) => normalize(w).replace(/ /g, '')));
 }
 
 /** Levenshtein edit distance. */

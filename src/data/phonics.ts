@@ -104,11 +104,28 @@ export const BREAKDOWNS: Record<string, string> = {
   your: 'y !our=or', said: 's !ai=e d', way: 'w ay', each: 'ea=ee ch', which: 'wh=w i ch',
   their: 'th=dh !eir=air', make: 'm a^=ay k e=_', time: 't i^=igh m e=_', word: 'w !or=er d',
   long: 'l o ng', day: 'd ay', part: 'p ar t', find: 'f ind=igh+n+d',
-  // ---- demo words (not in a list; used by the debug hook and screenshots) ----
-  ship: 'sh i p', cake: 'c=k a^=ay k e=_',
+  // ---- Kingdom 2: Frost Realm (digraphs, then blends) ----
+  ship: 'sh i p', fish: 'f i sh', shop: 'sh o p', dish: 'd i sh', chin: 'ch i n', chop: 'ch o p',
+  thin: 'th i n', bath: 'b a th', duck: 'd u ck=k', frog: 'f-r o g', flag: 'f-l a g', sled: 's-l e d',
+  drum: 'd-r u m', crab: 'c=k-r a b', clap: 'c=k-l a p', swim: 's-w i m', spin: 's-p i n', step: 's-t e p',
+  chest: 'ch e s-t', frost: 'f-r o s-t',
+
+  // ---- Kingdom 3: Desert Sands (magic e, then vowel teams) ----
+  cake: 'c=k a^=ay k e=_', game: 'g a^=ay m e=_', cave: 'c=k a^=ay v e=_', lake: 'l a^=ay k e=_',
+  bike: 'b i^=igh k e=_', kite: 'k i^=igh t e=_', hide: 'h i^=igh d e=_', bone: 'b o^=oa n e=_',
+  home: 'h o^=oa m e=_', rope: 'r o^=oa p e=_', feet: 'f ee t', seed: 's ee d', tree: 't-r ee',
+  sheep: 'sh ee p', rain: 'r ai=ay n', tail: 't ai=ay l', sail: 's ai=ay l', boat: 'b oa t',
+  goat: 'g oa t', road: 'r oa d',
+
+  // ---- Kingdom 4: Shadow Fortress (two syllables split with |, and 2nd-grade sight words) ----
+  sunset: 's u n | s e t', hotdog: 'h o t | d o g', laptop: 'l a p | t o p', zigzag: 'z i g | z a g',
+  napkin: 'n a p | k i n', picnic: 'p i c=k | n i c=k', basket: 'b a s | k e t', rabbit: 'r a b | b i t',
+  kitten: 'k i t | t e n', dragon: 'd-r a g | o n', robot: 'r o=oa | b o t', tiger: 't i=igh | g er',
+  wish: 'w i sh', made: 'm a^=ay d e=_', green: 'g-r ee n', sleep: 's-l ee p', cold: 'c=k o=oa l-d',
+  both: 'b !o=oa th', very: 'v e r y=ee', many: 'm !a=e n y=ee',
 };
 /** Breakdowns that exist only for demos/screenshots (window.__soundOut). */
-export const DEMO_WORDS = ['ship', 'cake'];
+export const DEMO_WORDS: string[] = [];
 
 export type ChunkKind = 'single' | 'digraph' | 'blend' | 'vowelTeam' | 'rVowel' | 'magicE' | 'ending' | 'double' | 'silent';
 
@@ -124,6 +141,8 @@ export interface Chunk {
   blend: number;
   /** For a magic-e vowel: index of the silent e it is linked to. */
   linkTo: number;
+  /** Syllable number (0, 1, ...) for two-syllable words split with '|' in the spec. */
+  syl: number;
 }
 
 const DIGRAPHS = new Set(['sh', 'ch', 'th', 'wh', 'ck', 'ng', 'ph', 'kn', 'wr', 'gh', 'tch']);
@@ -135,7 +154,9 @@ export function parseBreakdown(word: string, spec: string): Chunk[] {
   const chunks: Chunk[] = [];
   let blendId = 0;
   let magicVowel = -1;
+  let syl = 0;
   for (const group of spec.trim().split(/\s+/)) {
+    if (group === '|') { syl++; continue; }
     const parts = group.split('-');
     const blend = parts.length > 1 ? blendId++ : -1;
     for (const raw of parts) {
@@ -157,7 +178,7 @@ export function parseBreakdown(word: string, spec: string): Chunk[] {
       else if (DIGRAPHS.has(letters)) kind = 'digraph';
       else kind = 'single';
       if (magic) magicVowel = chunks.length;
-      chunks.push({ text: letters, sounds, kind, heart, blend, linkTo: -1 });
+      chunks.push({ text: letters, sounds, kind, heart, blend, linkTo: -1, syl });
     }
   }
   if (magicVowel >= 0) {

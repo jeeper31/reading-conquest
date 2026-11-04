@@ -84,13 +84,13 @@ export class SoundOut {
     const s = this.scene;
     const row = s.add.container(W / 2, 300);
     this.root.add(row);
-    const TH = 180, GAP = 26, BLEND_GAP = 8;
+    const TH = 180, GAP = 26, BLEND_GAP = 8, SYL_GAP = 90;
     // measure
     const texts = this.chunks.map((ch) => s.add.text(0, 0, ch.text, { fontFamily: READ_FONT, fontSize: '120px', color: '#2b1d14', fontStyle: 'bold', resolution: 2 }).setOrigin(0.5, 0.55));
     const widths = texts.map((t) => Math.max(120, t.width + 50));
     const xs: number[] = []; let x = 0;
     this.chunks.forEach((ch, i) => {
-      if (i > 0) x += ch.blend >= 0 && ch.blend === this.chunks[i - 1].blend ? BLEND_GAP : GAP;
+      if (i > 0) x += ch.syl !== this.chunks[i - 1].syl ? SYL_GAP : ch.blend >= 0 && ch.blend === this.chunks[i - 1].blend ? BLEND_GAP : GAP;
       xs.push(x + widths[i] / 2); x += widths[i];
     });
     const total = x;
@@ -122,6 +122,14 @@ export class SoundOut {
       const kind = ch.heart ? 'heart part' : ch.blend >= 0 ? '' : ch.kind === 'magicE' ? (silent ? 'makes the vowel long' : 'says its name') : KIND_LABEL[ch.kind] ?? '';
       if (kind) row.add(s.add.text(cx, TH / 2 + 70, kind, { fontFamily: FONT, fontSize: '20px', color: '#8a5a2e', resolution: 2 }).setOrigin(0.5));
       this.tiles.push({ c, bg, w, chunk: ch, color, x: cx });
+    });
+    // syllable split: a dashed divider between the two word parts ("sun | set")
+    this.chunks.forEach((ch, i) => {
+      if (i === 0 || ch.syl === this.chunks[i - 1].syl) return;
+      const a = this.tiles[i - 1], b = this.tiles[i];
+      const mx = (a.x + a.w / 2 + b.x - b.w / 2) / 2;
+      for (let y = -TH / 2; y < TH / 2; y += 22) over.fillStyle(0x8a5a2e, 1).fillRoundedRect(mx - 4, y, 8, 12, 4);
+      row.add(s.add.text(mx, -TH / 2 - 26, 'syllables', { fontFamily: FONT, fontSize: '20px', color: '#8a5a2e', resolution: 2 }).setOrigin(0.5));
     });
     // blend brackets: one bar under each group of blended tiles
     const groups = new Map<number, number[]>();

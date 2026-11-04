@@ -34,6 +34,15 @@ const TABLE: Row[] = [
   ['brown', 'brownie', Y, Y, N], ['again', 'a gain', Y, Y, Y],
   ['cat', 'hat', Y, N, N], ['bed', 'bad', Y, Y, N], ['dog', 'dug', Y, Y, N], ['pen', 'pin', Y, Y, N],
   // clearly different words: always rejected
+  // later kingdoms: homophones, split two-syllable words
+  ['tail', 'tale', Y, Y, Y], ['sail', 'sale', Y, Y, Y], ['road', 'rode', Y, Y, Y], ['road', 'rowed', Y, Y, Y],
+  ['feet', 'feat', Y, Y, Y], ['rain', 'reign', Y, Y, Y], ['made', 'maid', Y, Y, Y], ['very', 'vary', Y, Y, Y],
+  ['hotdog', 'hot dog', Y, Y, Y], ['hotdog', 'hot-dog', Y, Y, Y], ['sunset', 'sun set', Y, Y, Y], ['laptop', 'lap top', Y, Y, Y],
+  ['zigzag', 'zig zag', Y, Y, Y], ['napkin', 'nap kin', Y, Y, Y], ['picnic', 'pick nick', Y, Y, N], ['rabbit', 'rabbit', Y, Y, Y],
+  ['dragon', 'a dragon', Y, Y, Y], ['tiger', 'tigger', Y, Y, N], ['kitten', 'kitty', Y, Y, N], ['ship', 'chip', Y, Y, N],
+  ['many', 'money', Y, Y, N], ['basket', 'bask it', Y, Y, N], ['robot', 'row bot', Y, Y, N],
+  ['dragon', 'wagon', N, N, N], ['rabbit', 'carrot', N, N, N], ['ship', 'boat', N, N, N], ['cake', 'pie', N, N, N],
+  ['tiger', 'lion', N, N, N], ['sunset', 'sunrise', N, N, N], ['frog', 'toad', N, N, N],
   ['cat', 'dog', N, N, N], ['cat', 'the dog', N, N, N], ['sun', 'moon', N, N, N], ['big', 'small', N, N, N],
   ['red', 'blue', N, N, N], ['go', 'stop', N, N, N], ['yes', 'no', N, N, N], ['the', 'cat', N, N, N],
   ['dog', 'cat', N, N, N], ['jam', 'toast', N, N, N], ['under', 'over', N, N, N], ['white', 'black', N, N, N],
