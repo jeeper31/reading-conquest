@@ -3,10 +3,11 @@ import { playMusic } from '../music/player';
 import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, tiledGrass, scatterDecor, FONT, floatText , soundToggles } from '../ui';
 import { sfx } from '../audio';
 import {
-  save, persist, UNIT_DEFS, UNIT_ORDER, UPGRADES, UpgradeId, UnitType, armySpaceUsed, campSpace, castlesBeaten, armyCount, CASTLES,
+  save, persist, UNIT_DEFS, UNIT_ORDER, UPGRADES, UpgradeId, UnitType, armySpaceUsed, campSpace, castlesBeaten, armyCount, KINGDOMS, pendingGraduation,
 } from '../state';
 import { makeUnitVisual, animateWalk, UnitVisual, VisualKind, iconKey } from '../units';
 import { UPGRADE_ORDER, SPEAR_TIERS, type Gear } from '../gear';
+import { CASTLES_PER_KINGDOM } from '../kingdoms';
 
 /** Which soldiers show off each upgrade, and what they'd wear at upgrade level `lvl`. */
 function previewFor(id: UpgradeId, lvl: number): { kind: VisualKind; gear: Gear }[] {
@@ -40,6 +41,8 @@ export class CampScene extends Phaser.Scene {
   }
 
   create() {
+    const grad = pendingGraduation();
+    if (grad !== null) { this.scene.start('Crown', { kingdom: grad }); return; }
     fadeIn(this);
     playMusic('camp');
     soundToggles(this, 930, 40);
@@ -69,7 +72,7 @@ export class CampScene extends Phaser.Scene {
     this.spaceText = txt(this, 430, 44, '', 24, '#bfe3ff').setDepth(9501);
     this.gold = goldHud(this);
     this.gold.group.forEach((o) => (o as any).setDepth(9500));
-    txt(this, 380, 112, `Words read: ${save.totalRead}   Castles won: ${castlesBeaten()}/${CASTLES.length}`, 20).setDepth(9501);
+    txt(this, 380, 112, `Words read: ${save.totalRead}   Castles won: ${castlesBeaten()}/${KINGDOMS.length * CASTLES_PER_KINGDOM}   Crowns: ${save.crowns.length}`, 20).setDepth(9501);
 
     // Main actions
     button(this, 205, 655, 330, 92, 'READ WORDS', COLORS.green, () => goTo(this, 'Read'), { fontSize: 38 }).setDepth(9600);

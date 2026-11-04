@@ -3,7 +3,7 @@ import { makeUnitVisual } from '../units';
 import { playMusic } from '../music/player';
 import { W, H, txt, button, COLORS, tiledGrass, scatterDecor, goTo, fadeIn , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
-import { save, castlesBeaten } from '../state';
+import { save, castlesBeaten, pendingGraduation, KINGDOMS } from '../state';
 
 export class TitleScene extends Phaser.Scene {
   constructor() { super('Title'); }
@@ -26,13 +26,22 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: t, scale: 1.04, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     txt(this, W / 2, 165, 'Read words. Build an army. Conquer castles!', 30).setDepth(9000);
 
+    // crowns he has won so far
+    save.crowns.slice().sort().forEach((k, i, a) => {
+      const cr = this.add.image(W / 2 + (i - (a.length - 1) / 2) * 90, 228, `crown_${k}`).setScale(0.7).setDepth(9000);
+      this.tweens.add({ targets: cr, y: 220, duration: 900, yoyo: true, repeat: -1, delay: i * 200, ease: 'Sine.easeInOut' });
+    });
+    txt(this, W / 2, 680, `Now exploring: ${KINGDOMS[save.kingdom].name}`, 22).setDepth(9000);
     const first = save.totalRead === 0 && castlesBeaten() === 0;
+    const grad = pendingGraduation();
+    const dest = () => (grad !== null ? 'Crown' : first ? 'Read' : 'Camp');
+    const data = grad !== null ? { kingdom: grad } : undefined;
     button(this, W / 2, 600, 360, 92, first ? 'START!' : 'PLAY!', COLORS.green, () => {
       unlockAudio();
       sfx.horn();
-      goTo(this, first ? 'Read' : 'Camp');
+      goTo(this, dest(), data);
     }, { fontSize: 50 }).setDepth(9000);
 
-    this.input.keyboard?.once('keydown-SPACE', () => { unlockAudio(); goTo(this, first ? 'Read' : 'Camp'); });
+    this.input.keyboard?.once('keydown-SPACE', () => { unlockAudio(); goTo(this, dest(), data); });
   }
 }

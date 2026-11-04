@@ -6,7 +6,7 @@ import { makeUnitVisual, animateWalk, UnitVisual, VisualKind } from '../units';
 import { weaponKey, siegeKey, ARMOR_TIERS, WEAPON_TIERS, SIEGE_TIERS } from '../art-gear';
 
 type View = 'armor' | 'weapons' | 'all';
-const COL0 = 300, COLW = 200;
+const COL0 = 262, COLW = 166, CARD_W = 156;
 
 /** "Armory": every gear tier side by side, so kids can see what they're saving up for. */
 export class ArmoryScene extends Phaser.Scene {
@@ -71,9 +71,9 @@ export class ArmoryScene extends Phaser.Scene {
     const own = save.upgrades.armor;
     for (let a = 0; a < ARMOR_TIERS; a++) {
       const x = COL0 + a * COLW;
-      this.card(x, 425, 186, 540, a, own);
-      this.c.add(this.label(x, 192, `${a + 1}. ${UPGRADES.armor.tiers[a].name}`, 19));
-      (['knight', 'archer', 'spearman'] as VisualKind[]).forEach((k, r) => this.soldier(k, x, 340 + r * 162, 1.6, a, 0));
+      this.card(x, 425, CARD_W, 540, a, own);
+      this.c.add(this.label(x, 192, `${a + 1}. ${UPGRADES.armor.tiers[a].name}`.replace(/ (Armor|Mail|Plate)$/, '\n$1'), 17));
+      (['knight', 'archer', 'spearman'] as VisualKind[]).forEach((k, r) => this.soldier(k, x, 350 + r * 158, 1.45, a, 0));
     }
     ['Knight', 'Archer', 'Spearman'].forEach((n, r) => this.rowName(295 + r * 162, n));
     this.c.add(this.label(W / 2, 700, 'Every Armor upgrade: +20% health for all troops', 18, '#bfffb0'));
@@ -91,7 +91,7 @@ export class ArmoryScene extends Phaser.Scene {
       this.rowName(y, r.label);
       for (let t = 0; t < r.n; t++) {
         const x = COL0 + t * COLW;
-        this.card(x, y, 186, 118, t, save.upgrades[r.id]);
+        this.card(x, y, CARD_W, 118, t, save.upgrades[r.id]);
         if (r.id === 'siege') {
           this.c.add(this.add.image(x - 30, y - 10, siegeKey('ram_log', t)).setOrigin(0.15, 0.5).setScale(r.scale));
           this.c.add(this.add.image(x - 34, y + 30, r.key(t)).setOrigin(0.5, 0.9).setScale(r.scale));
@@ -100,20 +100,20 @@ export class ArmoryScene extends Phaser.Scene {
           // Lay weapons flat (point to the right) so they line up in a row.
           const img = this.add.image(x, y - 10, r.key(t)).setAngle(r.label === 'Archers' ? 0 : 90).setScale(r.scale);
           this.c.add(img);
-          if (t === 4) this.tweens.add({ targets: img, alpha: 0.75, duration: 500, yoyo: true, repeat: -1 });
+          if (t >= 4) this.tweens.add({ targets: img, alpha: 0.75, duration: 500, yoyo: true, repeat: -1 });
         }
-        this.c.add(this.label(x, y + 44, r.names[t], 16));
+        this.c.add(this.label(x, y + 44, r.names[t], 14));
       }
     });
     this.c.add(this.label(W / 2, 705, 'Weapons: +25% knight & spear damage   Bows: +25% archer damage   Siege: +30% ram & catapult', 16, '#bfffb0'));
   }
 
   private drawAll() {
-    for (let t = 0; t < 5; t++) {
+    for (let t = 0; t < ARMOR_TIERS; t++) {
       const x = COL0 + t * COLW;
-      this.card(x, 425, 186, 540, t, Math.min(save.upgrades.armor, save.upgrades.sword, save.upgrades.bow));
-      this.c.add(this.label(x, 192, t === 0 ? 'Brand new' : t === 4 ? 'LEGENDARY' : `Level ${t}`, 20, t === 4 ? '#ffe14d' : '#ffffff'));
-      (['knight', 'archer', 'spearman'] as VisualKind[]).forEach((k, r) => this.soldier(k, x, 340 + r * 162, 1.6, t, t));
+      this.card(x, 425, CARD_W, 540, t, Math.min(save.upgrades.armor, save.upgrades.sword, save.upgrades.bow));
+      this.c.add(this.label(x, 192, t === 0 ? 'Brand new' : t === 4 ? 'LEGENDARY' : t === 5 ? 'DRAGON' : `Level ${t}`, 20, t === 5 ? '#ff8a3a' : t === 4 ? '#ffe14d' : '#ffffff'));
+      (['knight', 'archer', 'spearman'] as VisualKind[]).forEach((k, r) => this.soldier(k, x, 350 + r * 158, 1.45, t, t));
     }
     ['Knight', 'Archer', 'Spearman'].forEach((n, r) => this.rowName(295 + r * 162, n));
     this.c.add(this.label(W / 2, 700, 'Read words, earn gold, upgrade at the Forge!', 18, '#bfffb0'));

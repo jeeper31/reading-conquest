@@ -3,7 +3,7 @@ import { iconKey } from '../units';
 import { playMusic, setDuck } from '../music/player';
 import { W, H, txt, button, COLORS, goldHud, goTo, fadeIn, panel, READ_FONT, FONT, Button, soundToggles, floatText } from '../ui';
 import { sfx, unlockAudio } from '../audio';
-import { save, persist, pickWord, recordWord, GOLD_PER_WORD } from '../state';
+import { save, persist, pickWord, recordWord, GOLD_PER_WORD, isNewWord, KINGDOMS } from '../state';
 import { Listener, MicState, queryMicPermission, speakWord, speechSupported, secureContextOk, getStrictness, setStrictness, LISTEN_MS, Strictness } from '../speech';
 import { WORD_LEVELS } from '../data/words';
 import { SoundOut } from '../soundout';
@@ -23,6 +23,7 @@ const MIC_LABELS: Record<MicState, [string, number]> = {
 export class ReadScene extends Phaser.Scene {
   private word = '';
   private wordText!: Phaser.GameObjects.Text;
+  private newTag!: Phaser.GameObjects.Container;
   private heardText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private card!: Phaser.GameObjects.Container;
@@ -60,15 +61,16 @@ export class ReadScene extends Phaser.Scene {
     // Sky + hills backdrop
     const g = this.add.graphics();
     g.fillGradientStyle(0x6ec6ff, 0x6ec6ff, 0xbfe8ff, 0xbfe8ff, 1).fillRect(0, 0, W, H);
-    g.fillStyle(0x8fd45a, 1).fillEllipse(250, H + 80, 900, 420);
-    g.fillStyle(0x7cc243, 1).fillEllipse(1050, H + 60, 1000, 380);
+    const [h1, h2] = [[0x8fd45a, 0x7cc243], [0xeaf6ff, 0xcfe6f8], [0xf0cf86, 0xe0b45e], [0x5a4a5e, 0x40324a]][save.kingdom] ?? [0x8fd45a, 0x7cc243];
+    g.fillStyle(h1, 1).fillEllipse(250, H + 80, 900, 420);
+    g.fillStyle(h2, 1).fillEllipse(1050, H + 60, 1000, 380);
     g.fillStyle(0xffffff, 0.8);
     for (const [x, y, s] of [[160, 110, 1], [1080, 150, 1.3], [700, 70, 0.8]]) {
       g.fillEllipse(x, y, 140 * s, 50 * s); g.fillEllipse(x + 40 * s, y - 20 * s, 90 * s, 60 * s); g.fillEllipse(x - 40 * s, y - 10 * s, 80 * s, 45 * s);
     }
     // little camp on the hill
     this.add.image(120, 640, 'tent').setScale(0.9);
-    this.add.image(1170, 600, 'keep').setScale(0.55).setAlpha(0.95);
+    this.add.image(1170, 600, 'keep').setScale(0.55).setAlpha(0.95).setTint(KINGDOMS[save.kingdom].castleTint);
     this.add.image(230, 680, iconKey('knight', 'blue')).setScale(1.3);
 
     // Top bar
@@ -88,6 +90,15 @@ export class ReadScene extends Phaser.Scene {
       fontFamily: READ_FONT, fontSize: '150px', color: '#2b1d14', fontStyle: 'bold', resolution: 2,
     }).setOrigin(0.5);
     this.card.add(this.wordText);
+    // "New word!" ribbon for this kingdom's fresh words
+    this.newTag = this.add.container(-300, -112);
+    const tg = this.add.graphics();
+    tg.fillStyle(0x2b1d14, 1).fillRoundedRect(-82, -20, 164, 44, 20);
+    tg.fillStyle(0xff8a3a, 1).fillRoundedRect(-80, -22, 160, 40, 18);
+    this.newTag.add([tg, this.add.image(-58, -2, 'star').setScale(0.24), txt(this, 12, -2, 'New word!', 22, '#ffffff')]);
+    this.newTag.setAngle(-8);
+    this.card.add(this.newTag);
+    this.tweens.add({ targets: this.newTag, scale: 1.08, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.heardText = txt(this, W / 2, 452, '', 26, '#ffffff');
     // Tap the word itself, or the tab under it, to sound it out
     this.wordText.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.openSoundOut());
@@ -169,6 +180,7 @@ export class ReadScene extends Phaser.Scene {
     this.failedWord = false;
     this.busy = false;
     this.wordText.setText(this.word);
+    this.newTag.setVisible(isNewWord(this.word));
     const fit = Math.min(1, 640 / Math.max(1, this.wordText.width));
     this.card.setScale(0.6).setAlpha(0);
     this.wordText.setScale(fit);

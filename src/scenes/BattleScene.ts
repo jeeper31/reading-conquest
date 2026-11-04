@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { playMusic, playJingle, musicOn } from '../music/player';
 import { W, H, txt, button, COLORS, goTo, fadeIn, panel, tiledGrass, scatterDecor, floatText, FONT , soundToggles } from '../ui';
 import { sfx, unlockAudio } from '../audio';
-import { save, persist, CASTLES, CastleDef, UNIT_ORDER, UnitType, unitStats, UNIT_DEFS } from '../state';
+import { save, persist, CastleDef, UNIT_ORDER, UnitType, unitStats, UNIT_DEFS, castleDef, KINGDOMS, type KingdomDef } from '../state';
+import { CASTLES_PER_KINGDOM, clampKingdom, type EnemyTeam } from '../kingdoms';
 import { makeUnitVisual, animateWalk, UnitVisual, VisualKind, iconKey } from '../units';
 import { defenderGear } from '../gear';
 
@@ -27,14 +28,21 @@ interface Building extends Ent {
   isUnit: false;
   kind: BKind;
   img: Phaser.GameObjects.Image;
+  tint: number; // kingdom stone tint (0xffffff = none)
+  perched?: Unit[]; // wall archers standing on this wall
   hitH: number; // height above base where hits land
   fireT: number;
 }
 
 interface Unit extends Ent {
   isUnit: true;
-  team: 'blue' | 'red';
+  team: 'blue' | EnemyTeam;
   type: VisualKind;
+  /** wall archers and enemy catapults never move */
+  fixed?: boolean;
+  boss?: boolean;
+  splash?: number;
+  aggro?: number;
   dmg: number;
   range: number;
   speed: number;
@@ -51,7 +59,13 @@ interface Unit extends Ent {
 
 export class BattleScene extends Phaser.Scene {
   private castleIdx = 0;
+  private realArmy = false;
+  private speed = 1;
+  private k = 0;
+  private kdef!: KingdomDef;
   private def!: CastleDef;
+  private bossUnit?: Unit;
+  private bossBar?: { g: Phaser.GameObjects.Graphics; t: Phaser.GameObjects.Text };
   private buildings: Building[] = [];
   private units: Unit[] = [];
   private pool: Record<UnitType, number> = { knight: 0, archer: 0, spearman: 0, ram: 0, catapult: 0 };
@@ -81,27 +95,33 @@ export class BattleScene extends Phaser.Scene {
 
   constructor() { super('Battle'); }
 
-  init(data: { castle?: number; autodeploy?: boolean }) {
-    this.castleIdx = Phaser.Math.Clamp(data.castle ?? 0, 0, CASTLES.length - 1);
+  init(data: { castle?: number; kingdom?: number; autodeploy?: boolean; realArmy?: boolean; speed?: number }) {
+    this.realArmy = !!data.realArmy;
+    this.speed = Phaser.Math.Clamp(Number(data.speed) || 1, 1, 4);
+    this.k = clampKingdom(data.kingdom ?? save.kingdom);
+    this.castleIdx = Phaser.Math.Clamp(Math.floor(Number(data.castle ?? 0)) || 0, 0, CASTLES_PER_KINGDOM - 1);
     this.demo = !!data.autodeploy;
   }
 
   create() {
     fadeIn(this);
-    playMusic('battle');
+    this.kdef = KINGDOMS[this.k];
+    this.def = castleDef(this.k, this.castleIdx);
+    playMusic(this.def.boss ? 'boss' : 'battle');
     soundToggles(this, 862, 40);
-    this.def = CASTLES[this.castleIdx];
-    this.buildings = []; this.units = []; this.cards = {}; this.hudStars = [];
+    this.buildings = []; this.units = []; this.cards = {}; this.hudStars = []; this.bossUnit = undefined; this.bossBar = undefined;
     this.timeLeft = BATTLE_TIME; this.started = false; this.over = false; this.starsEarned = 0; this.deployedAny = false;
-    this.pool = this.demo ? { knight: 10, archer: 8, spearman: 5, ram: 2, catapult: 2 } : { ...save.army };
+    this.pool = this.demo && !this.realArmy ? { knight: 10, archer: 8, spearman: 5, ram: 2, catapult: 2 } : { ...save.army };
+    this.time.timeScale = this.speed; this.tweens.timeScale = this.speed;
     this.selected = UNIT_ORDER.find((t) => this.pool[t] > 0) ?? null;
 
-    tiledGrass(this);
+    tiledGrass(this, this.kdef.groundTint === 0xffffff ? undefined : this.kdef.groundTint, this.kdef.ground);
     const ringOuter = this.def.ring + (this.def.doubleWall ? 46 : 0);
-    this.add.image(CX, CY + 10, 'dirt').setScale((ringOuter * 2 + 90) / 512, ((ringOuter * 2 + 90) * RY) / 360 * 1.05).setDepth(-9000);
+    const dirt = this.add.image(CX, CY + 10, 'dirt').setScale((ringOuter * 2 + 90) / 512, ((ringOuter * 2 + 90) * RY) / 360 * 1.05).setDepth(-9000);
+    if (this.kdef.dirtTint !== 0xffffff) dirt.setTint(this.kdef.dirtTint);
     this.zoneRX = ringOuter + 50;
     const deco = new Phaser.Geom.Ellipse(CX, CY, this.zoneRX * 2 + 60, (this.zoneRX * 2 + 60) * RY);
-    scatterDecor(this, 22, [new Phaser.Geom.Rectangle(0, FIELD_BOTTOM - 20, W, 200), new Phaser.Geom.Rectangle(0, 0, W, 70), new Phaser.Geom.Rectangle(CX - this.zoneRX - 40, CY - this.zoneRX * RY - 60, this.zoneRX * 2 + 80, this.zoneRX * 2 * RY + 100)] as any, 30 + this.castleIdx);
+    scatterDecor(this, 22, [new Phaser.Geom.Rectangle(0, FIELD_BOTTOM - 20, W, 200), new Phaser.Geom.Rectangle(0, 0, W, 70), new Phaser.Geom.Rectangle(CX - this.zoneRX - 40, CY - this.zoneRX * RY - 60, this.zoneRX * 2 + 80, this.zoneRX * 2 * RY + 100)] as any, 30 + this.castleIdx + this.k * 10, this.kdef.decor);
     void deco;
 
     this.zone = this.add.graphics().setDepth(-8000);
@@ -112,6 +132,8 @@ export class BattleScene extends Phaser.Scene {
     this.bars = this.add.graphics().setDepth(9800);
     this.buildHud();
     this.buildCards();
+    this.makeWeather();
+    if (this.bossUnit) this.bossIntro();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onFieldDown(p));
     this.input.on('pointerup', () => this.deployTimer?.remove());
@@ -141,7 +163,9 @@ export class BattleScene extends Phaser.Scene {
 
   private addBuilding(kind: BKind, x: number, y: number, key: string, scale: number, hp: number, r: number, hitH: number): Building {
     const img = this.add.image(x, y, key).setOrigin(0.5, kind === 'wall' ? 0.9 : 0.88).setScale(scale).setDepth(y);
-    const b: Building = { isUnit: false, kind, x, y, r, hp, maxHp: hp, alive: true, img, hitH, fireT: Math.random() };
+    const tint = this.kdef.castleTint;
+    if (tint !== 0xffffff) img.setTint(tint);
+    const b: Building = { isUnit: false, kind, x, y, r, hp, maxHp: hp, alive: true, img, tint, hitH, fireT: Math.random() };
     this.buildings.push(b);
     return b;
   }
@@ -173,11 +197,77 @@ export class BattleScene extends Phaser.Scene {
     flag.setData('keepFlag', true);
     (this as any).keepFlag = flag;
     // defenders
+    const team = this.kdef.enemyTeam;
     for (let i = 0; i < d.defenders; i++) {
       const a = (i / d.defenders) * Math.PI * 2;
       const x = CX + Math.cos(a) * 75, y = CY + 70 + Math.sin(a) * 40;
-      this.spawnUnit('defender', 'red', x, y, false);
+      this.spawnUnit('defender', team, x, y, false);
     }
+    // archers on the outer wall ring, spread out and favouring the front (where he attacks from)
+    const outer = this.buildings.filter((b) => b.kind === 'wall').slice(-Math.round(this.buildings.filter((b) => b.kind === 'wall').length / rings.length));
+    const na = d.wallArchers ?? 0;
+    for (let i = 0; i < na; i++) {
+      const wall = outer[Math.floor(((i + 0.5) / na) * outer.length) % outer.length];
+      const u = this.spawnUnit('archer', team, wall.x, wall.y - 16, false);
+      u.fixed = true;
+      u.hp = u.maxHp = d.wallArcherHp ?? 100;
+      u.dmg = d.wallArcherDmg ?? 10;
+      u.range = 230; u.cooldown = 1500; u.structureMult = 1;
+      u.v.root.setDepth(wall.y + 2);
+      (wall.perched ??= []).push(u);
+    }
+    // enemy catapults inside the walls
+    const nc = d.catapults ?? 0;
+    for (let i = 0; i < nc; i++) {
+      const [x, y] = [[CX - d.ring * 0.5, CY + 24], [CX + d.ring * 0.5, CY + 24], [CX + 20, CY - d.ring * 0.42 * RY]][i % 3];
+      const u = this.spawnUnit('catapult', team, x, y, false);
+      u.fixed = true;
+      u.hp = u.maxHp = Math.round(d.towerHp * 0.7);
+      u.dmg = d.catapultDmg ?? 36;
+      u.range = 360; u.cooldown = 4400; u.splash = 55; u.r = 24;
+      u.atkT = 2500 + i * 900;
+    }
+    if (d.boss) this.spawnBoss();
+  }
+
+  private spawnBoss() {
+    const b = this.def.boss!;
+    const team = this.kdef.enemyTeam;
+    const kind: VisualKind = b.kind === 'giant' ? 'defender' : b.kind;
+    const x = CX, y = CY + 96;
+    const v = makeUnitVisual(this, kind, team, b.kind === 'giant' ? 2.1 : b.kind === 'camel' ? 1.15 : 1.05, b.kind === 'giant' ? { armor: 4, weapon: 4 } : undefined);
+    v.root.setPosition(x, y).setDepth(y);
+    v.rig.scaleX = -1;
+    const u: Unit = {
+      isUnit: true, team, type: kind, x, y, r: b.kind === 'dragon' ? 40 : 32, hp: b.hp, maxHp: b.hp, alive: true, dmg: b.dmg, range: b.range,
+      speed: b.speed, cooldown: b.cooldown, structureMult: 1, v, target: null, atkT: 1500, phase: 0, facing: -1, retargetT: 0,
+      home: { x, y }, boss: true, splash: b.splash, aggro: b.kind === 'dragon' ? 300 : 280,
+    };
+    this.units.push(u);
+    this.bossUnit = u;
+  }
+
+  private bossIntro() {
+    const b = this.def.boss!;
+    const g = this.add.graphics().setDepth(9900);
+    const t = txt(this, W / 2, 96, b.name.replace(/^the /, 'The '), 22, '#ffe14d').setDepth(9902);
+    this.bossBar = { g, t };
+    const banner = this.add.container(W / 2, 250).setDepth(19000);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x2b1d14, 0.85).fillRoundedRect(-330, -60, 660, 120, 30);
+    bg.lineStyle(4, 0xffe14d, 1).strokeRoundedRect(-330, -60, 660, 120, 30);
+    banner.add([bg, txt(this, 0, -18, 'BOSS BATTLE!', 46, '#ff8a3a'), txt(this, 0, 30, `Defeat ${b.name} to win the crown!`, 26, '#ffffff')]);
+    banner.setScale(0.3).setAlpha(0);
+    this.tweens.add({ targets: banner, scale: 1, alpha: 1, duration: 450, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: banner, alpha: 0, delay: 2600, duration: 500, onComplete: () => banner.destroy() });
+    this.time.delayedCall(250, () => { sfx.boom(); this.cameras.main.shake(400, 0.008); });
+  }
+
+  private makeWeather() {
+    const w = this.kdef.weather;
+    if (w === 'snow') this.add.particles(0, 0, 'snowflake', { x: { min: -40, max: W + 40 }, y: -10, lifespan: 7000, speedY: { min: 40, max: 80 }, speedX: { min: -20, max: 25 }, scale: { min: 0.4, max: 1 }, alpha: { start: 0.9, end: 0.5 }, frequency: 70 }).setDepth(9450);
+    if (w === 'sand') this.add.particles(0, 0, 'sandmote', { x: -10, y: { min: 80, max: FIELD_BOTTOM }, lifespan: 5000, speedX: { min: 220, max: 360 }, speedY: { min: -10, max: 20 }, scale: { min: 0.6, max: 1.3 }, alpha: { start: 0.8, end: 0 }, frequency: 45 }).setDepth(9450);
+    if (w === 'embers') this.add.particles(0, 0, 'ember', { x: { min: 0, max: W }, y: FIELD_BOTTOM, lifespan: 4500, speedY: { min: -90, max: -40 }, speedX: { min: -15, max: 15 }, scale: { start: 1, end: 0.2 }, alpha: { start: 0.95, end: 0 }, blendMode: 'ADD', frequency: 110 }).setDepth(9450);
   }
 
   private makeEmitters() {
@@ -278,12 +368,12 @@ export class BattleScene extends Phaser.Scene {
     return true;
   }
 
-  private spawnUnit(type: VisualKind, team: 'blue' | 'red', x: number, y: number, drop: boolean): Unit {
-    const v = makeUnitVisual(this, type, team, type === 'defender' ? 1.1 : 1, type === 'defender' ? defenderGear(this.castleIdx) : undefined);
+  private spawnUnit(type: VisualKind, team: 'blue' | EnemyTeam, x: number, y: number, drop: boolean): Unit {
+    const v = makeUnitVisual(this, type, team, type === 'defender' ? 1.1 : 1, team !== 'blue' ? defenderGear(this.castleIdx, this.k) : undefined);
     v.root.setPosition(x, y).setDepth(y);
     let st: { hp: number; dmg: number; range: number; speed: number; cooldown: number; structureMult: number };
     if (type === 'defender') {
-      st = { hp: this.def.defenderHp, dmg: 9 + this.castleIdx * 2, range: 30, speed: 58, cooldown: 1000, structureMult: 1 };
+      st = { hp: this.def.defenderHp, dmg: this.def.defenderDmg, range: 30, speed: 58, cooldown: 1000, structureMult: 1 };
     } else {
       st = unitStats(type as UnitType);
     }
@@ -292,7 +382,7 @@ export class BattleScene extends Phaser.Scene {
       hp: st.hp, maxHp: st.hp, alive: true, dmg: st.dmg, range: st.range, speed: st.speed, cooldown: st.cooldown,
       structureMult: st.structureMult, v, target: null, atkT: Math.random() * 400, phase: Math.random() * 6, facing: 1, retargetT: 0,
     };
-    if (team === 'red') { u.home = { x, y }; u.facing = -1; v.rig.scaleX = -1; }
+    if (team !== 'blue') { u.home = { x, y }; u.facing = -1; v.rig.scaleX = -1; }
     if (drop) {
       sfx.deploy();
       v.root.y = y - 70;
@@ -313,7 +403,7 @@ export class BattleScene extends Phaser.Scene {
     }
     let k = 0;
     this.time.addEvent({
-      delay: 90, repeat: 26, callback: () => {
+      delay: 90, repeat: Math.max(0, UNIT_ORDER.reduce((n, u) => n + this.pool[u], 0) - 1), callback: () => {
         const t = UNIT_ORDER.find((u) => this.pool[u] > 0);
         if (!t) return;
         this.selected = t;
@@ -339,11 +429,12 @@ export class BattleScene extends Phaser.Scene {
   private chooseTarget(u: Unit): Ent | null {
     const alive = this.buildings.filter((b) => b.alive);
     const nonWall = alive.filter((b) => b.kind !== 'wall');
-    const reds = this.units.filter((x) => x.alive && x.team === 'red');
+    const reds = this.units.filter((x) => x.alive && x.team !== 'blue');
     const blues = this.units.filter((x) => x.alive && x.team === 'blue');
-    if (u.team === 'red') {
+    if (u.team !== 'blue') {
+      if (u.fixed) return this.nearest(u, blues, u.range);
       const home = u.home!;
-      let best: Unit | null = null, bd = 240;
+      let best: Unit | null = null, bd = u.aggro ?? 240;
       for (const b of blues) { const d = this.dist(home, b); if (d < bd) { bd = d; best = b; } }
       return best;
     }
@@ -376,13 +467,14 @@ export class BattleScene extends Phaser.Scene {
     if (e.isUnit) {
       const u = e as Unit;
       this.flash(u.v.body);
-      floatText(this, u.x, u.y - 46, `-${amount}`, u.team === 'blue' ? '#ff9a8a' : '#ffe14d', 18);
+      if (u.boss) this.tweens.add({ targets: u.v.root, scaleX: u.v.root.scaleX * 1.03, scaleY: u.v.root.scaleY * 0.97, duration: 60, yoyo: true });
+      floatText(this, u.x, u.y - (u.boss ? 120 : u.fixed && u.type === 'archer' ? 64 : 46), `-${amount}`, u.team === 'blue' ? '#ff9a8a' : '#ffe14d', u.boss ? 24 : 18);
       if (u.hp <= 0) this.killUnit(u);
     } else {
       const b = e as Building;
       const low = b.hp < b.maxHp * 0.5;
       if (b.kind === 'wall' && low && b.img.texture.key !== 'wall_cracked') b.img.setTexture('wall_cracked');
-      this.flash(b.img, low && b.kind !== 'wall' ? 0xbfae9a : undefined);
+      this.flash(b.img, low && b.kind !== 'wall' ? mulTint(0xbfae9a, b.tint) : b.tint === 0xffffff ? undefined : b.tint);
       floatText(this, b.x + Phaser.Math.Between(-12, 12), b.y - b.hitH - 20, `-${amount}`, '#ffe14d', b.kind === 'wall' ? 16 : 20);
       this.tweens.add({ targets: b.img, scaleY: b.img.scaleY * 0.96, duration: 50, yoyo: true });
       if (low && b.kind !== 'wall' && Math.random() < 0.3) this.smoke.explode(1, b.x, b.y - b.hitH);
@@ -394,6 +486,17 @@ export class BattleScene extends Phaser.Scene {
   private killUnit(u: Unit) {
     u.alive = false;
     sfx.death();
+    if (u.boss) {
+      sfx.boom();
+      this.cameras.main.shake(600, 0.018);
+      this.dust.explode(40, u.x, u.y - 20);
+      this.sparks.explode(30, u.x, u.y - 60);
+      this.coins.explode(20, u.x, u.y - 60);
+      floatText(this, W / 2, 200, `${this.def.boss!.name.toUpperCase()} IS DEFEATED!`, '#ffe14d', 42);
+      this.tweens.add({ targets: u.v.root, alpha: 0, angle: -20 * u.facing, y: u.y + 10, duration: 1400, ease: 'Cubic.easeIn', onComplete: () => u.v.root.destroy() });
+      this.time.delayedCall(10, () => this.updateProgress());
+      return;
+    }
     this.dust.explode(8, u.x, u.y);
     if (u.type === 'ram' || u.type === 'catapult') { this.splinters.explode(16, u.x, u.y - 20); this.smoke.explode(4, u.x, u.y - 20); }
     this.tweens.add({ targets: u.v.root, alpha: 0, y: u.y - 26, scaleX: 0.3, scaleY: 1.4, duration: 420, ease: 'Cubic.easeIn', onComplete: () => u.v.root.destroy() });
@@ -409,7 +512,9 @@ export class BattleScene extends Phaser.Scene {
       this.cameras.main.shake(120, 0.004);
       if (this.time.now - this.lastCrumble > 120) { sfx.crumble(); this.lastCrumble = this.time.now; }
       b.img.setTexture('rubble').setScale(0.7).setOrigin(0.5, 0.7).clearTint();
+      if (b.tint !== 0xffffff) b.img.setTint(b.tint);
       b.img.setDepth(b.y - 30);
+      for (const a of b.perched ?? []) if (a.alive) { a.hp = 0; floatText(this, a.x, a.y - 60, 'Whoa!', '#ffffff', 20); this.killUnit(a); }
       return;
     }
     sfx.crumble();
@@ -427,6 +532,7 @@ export class BattleScene extends Phaser.Scene {
       targets: b.img, scaleY: b.img.scaleY * 0.15, scaleX: b.img.scaleX * 1.1, duration: 420, ease: 'Cubic.easeIn',
       onComplete: () => {
         b.img.setTexture('rubble').setScale(big ? 2.4 : 1.3).setOrigin(0.5, 0.6).clearTint().setDepth(b.y - 40);
+        if (b.tint !== 0xffffff) b.img.setTint(b.tint);
       },
     });
     if (big) {
@@ -467,6 +573,23 @@ export class BattleScene extends Phaser.Scene {
     const dmg = u.dmg * mult * Phaser.Math.FloatBetween(0.9, 1.1);
     const hitY = t.y - (t.isUnit ? 16 : (t as Building).hitH * 0.5);
     switch (u.type) {
+      case 'dragon': {
+        // breathe a fireball from the mouth
+        sfx.launch();
+        const sc = v.root.scaleX;
+        const mx = u.x + 82 * sc * u.facing, my = u.y + v.rig.y * sc - 92 * sc;
+        const tx = t.x, ty = t.y;
+        this.tweens.add({ targets: v.body, angle: -6 * u.facing, duration: 160, yoyo: true });
+        this.projectile('fireball', mx, my, t, 420 + this.dist(u, t), 40, () => {
+          sfx.boom();
+          this.cameras.main.shake(180, 0.008);
+          this.smoke.explode(5, tx, ty - 10);
+          this.sparks.explode(14, tx, ty - 10);
+          for (const r of this.units) if (r.alive && r.team === 'blue' && this.dist(r, { x: tx, y: ty }) < (u.splash ?? 60)) this.damage(r, r === t ? dmg : dmg * 0.6, u);
+        }, { spin: true });
+        break;
+      }
+      case 'camel':
       case 'knight':
       case 'defender': {
         const w = v.weapon!;
@@ -480,6 +603,11 @@ export class BattleScene extends Phaser.Scene {
               sfx.sword();
               this.sparks.explode(5, (u.x + t.x) / 2, hitY);
               this.damage(t, dmg, u);
+              if (u.splash) {
+                this.cameras.main.shake(140, 0.007);
+                this.dust.explode(12, t.x, t.y);
+                for (const r of this.units) if (r !== t && r.alive && r.team === 'blue' && this.dist(r, t) < u.splash) this.damage(r, dmg * 0.6, u);
+              }
             } },
             { angle: v.restAngle, duration: 220, ease: 'Sine.easeOut' },
           ],
@@ -510,7 +638,7 @@ export class BattleScene extends Phaser.Scene {
             if (!u.alive) return;
             sfx.arrow();
             const d = this.dist(u, t);
-            this.projectile(v.gear.weapon >= 4 ? 'arrow_glow' : 'arrow', u.x + 14 * u.facing, u.y - 24, t, 180 + d * 1.6, 18 + d * 0.12, () => { if (t.alive) { this.damage(t, dmg, u); this.sparks.explode(2, t.x, hitY); } });
+            this.projectile(v.gear.weapon >= 5 ? 'arrow_fire' : v.gear.weapon >= 4 ? 'arrow_glow' : 'arrow', u.x + 14 * u.facing, u.y - 24, t, 180 + d * 1.6, 18 + d * 0.12, () => { if (t.alive) { this.damage(t, dmg, u); this.sparks.explode(2, t.x, hitY); } });
           },
         });
         break;
@@ -545,15 +673,19 @@ export class BattleScene extends Phaser.Scene {
               sfx.launch();
               const d = this.dist(u, t);
               const tx = t.x, ty = t.y;
-              this.projectile('boulder', u.x - 8 * u.facing, u.y - 70, t, 600 + d * 1.4, 120 + d * 0.35, () => {
+              this.projectile(u.team === 'blue' ? 'boulder' : this.k === 3 ? 'fireball' : 'boulder', u.x - 8 * u.facing, u.y - 70, t, 600 + d * 1.4, 120 + d * 0.35, () => {
                 sfx.boom();
                 this.cameras.main.shake(220, 0.01);
                 this.dust.explode(18, tx, ty - 10);
                 this.chips.explode(14, tx, ty - 30);
                 this.smoke.explode(3, tx, ty - 20);
                 // splash damage
-                for (const b of this.buildings) if (b.alive && this.dist(b, { x: tx, y: ty }) < 60 + b.r) this.damage(b, b === t ? dmg : dmg * 0.4, u);
-                for (const r of this.units) if (r.alive && r.team === 'red' && this.dist(r, { x: tx, y: ty }) < 60) this.damage(r, dmg * 0.6, u);
+                if (u.team === 'blue') {
+                  for (const b of this.buildings) if (b.alive && this.dist(b, { x: tx, y: ty }) < 60 + b.r) this.damage(b, b === t ? dmg : dmg * 0.4, u);
+                  for (const r of this.units) if (r.alive && r.team !== 'blue' && this.dist(r, { x: tx, y: ty }) < 60) this.damage(r, dmg * 0.6, u);
+                } else {
+                  for (const r of this.units) if (r.alive && r.team === 'blue' && this.dist(r, { x: tx, y: ty }) < (u.splash ?? 55)) this.damage(r, r === t ? dmg : dmg * 0.6, u);
+                }
               }, { spin: true, shadow: true });
             } },
             { angle: v.restAngle, duration: 700, ease: 'Sine.easeInOut' },
@@ -566,7 +698,7 @@ export class BattleScene extends Phaser.Scene {
 
   // ------------------------------------------------------------- loop
   update(_time: number, dtMs: number) {
-    const dt = Math.min(dtMs, 50) / 1000;
+    const dt = (Math.min(dtMs, 50) / 1000) * this.speed;
     if (!this.over && this.started) {
       this.timeLeft -= dt;
       const s = Math.max(0, Math.ceil(this.timeLeft));
@@ -593,8 +725,20 @@ export class BattleScene extends Phaser.Scene {
       u.target = this.over ? null : this.chooseTarget(u);
       u.retargetT = 0.6;
     }
-    // Red guards go home when there is nobody to fight
-    if (u.team === 'red' && !u.target && u.home) {
+    // Fixed enemies (wall archers, catapults) only turn and shoot
+    if (u.fixed) {
+      u.phase += dt * 6;
+      animateWalk(u.v, u.phase, false);
+      const t = u.target;
+      u.atkT -= dt * 1000;
+      if (t && !this.over && this.started) {
+        this.face(u, t.x);
+        if (u.atkT <= 0) { u.atkT = u.cooldown * Phaser.Math.FloatBetween(0.9, 1.1); this.attack(u, t); }
+      }
+      return;
+    }
+    // Enemy guards go home when there is nobody to fight
+    if (u.team !== 'blue' && !u.target && u.home) {
       const d = this.dist(u, u.home);
       if (d > 6) this.moveToward(u, u.home.x, u.home.y, dt, false);
       else { u.phase += dt * 6; animateWalk(u.v, u.phase, false); }
@@ -646,9 +790,9 @@ export class BattleScene extends Phaser.Scene {
     }
     u.x = nx; u.y = Math.min(ny, FIELD_BOTTOM - 8);
     this.face(u, tx);
-    u.phase += dt * (u.type === 'ram' || u.type === 'catapult' ? 8 : 12);
+    u.phase += dt * (u.type === 'ram' || u.type === 'catapult' ? 8 : u.boss ? 7 : 12);
     animateWalk(u.v, u.phase, true);
-    if (Math.random() < dt * 3) this.dust.explode(1, u.x - u.facing * 8, u.y);
+    if (u.type !== 'dragon' && Math.random() < dt * (u.boss ? 8 : 3)) this.dust.explode(1, u.x - u.facing * 8, u.y);
   }
 
   private separate() {
@@ -661,8 +805,11 @@ export class BattleScene extends Phaser.Scene {
         const d2 = dx * dx + dy * dy;
         if (d2 > 0.01 && d2 < min * min) {
           const d = Math.sqrt(d2), push = (min - d) * 0.25;
-          a.x -= (dx / d) * push; a.y -= (dy / d) * push;
-          b.x += (dx / d) * push; b.y += (dy / d) * push;
+          const ha = a.fixed || a.boss, hb = b.fixed || b.boss;
+          if (ha && hb) continue;
+          const pa = ha ? 0 : hb ? 2 : 1, pb = hb ? 0 : ha ? 2 : 1;
+          a.x -= (dx / d) * push * pa; a.y -= (dy / d) * push * pa;
+          b.x += (dx / d) * push * pb; b.y += (dy / d) * push * pb;
         }
       }
     }
@@ -672,7 +819,7 @@ export class BattleScene extends Phaser.Scene {
     const blues = this.units.filter((u) => u.alive && u.team === 'blue');
     if (!blues.length) return;
     for (const b of this.buildings) {
-      if (!b.alive || (b.kind !== 'tower' && !(b.kind === 'keep' && this.castleIdx >= 2))) continue;
+      if (!b.alive || (b.kind !== 'tower' && !(b.kind === 'keep' && this.def.keepBoulder > 0))) continue;
       b.fireT -= dt;
       if (b.fireT > 0) continue;
       const range = b.kind === 'tower' ? 250 : 280;
@@ -693,7 +840,7 @@ export class BattleScene extends Phaser.Scene {
           sfx.boom();
           this.cameras.main.shake(160, 0.006);
           this.dust.explode(14, tx, ty);
-          for (const u of this.units) if (u.alive && u.team === 'blue' && this.dist(u, { x: tx, y: ty }) < 50) this.damage(u, 26 + this.castleIdx * 6);
+          for (const u of this.units) if (u.alive && u.team === 'blue' && this.dist(u, { x: tx, y: ty }) < 50) this.damage(u, this.def.keepBoulder);
         }, { spin: true, shadow: true });
       }
     }
@@ -707,16 +854,30 @@ export class BattleScene extends Phaser.Scene {
       g.fillStyle(col, 1).fillRoundedRect(x - w / 2, y, Math.max(1, w * f), 5, 2);
     };
     for (const b of this.buildings) if (b.alive && b.hp < b.maxHp) draw(b.x, b.y - b.hitH - (b.kind === 'wall' ? 18 : 40) * b.img.scaleY - 6, b.kind === 'wall' ? 26 : 56, b.hp / b.maxHp, 0xe0483a);
-    for (const u of this.units) if (u.alive && u.hp < u.maxHp) draw(u.x, u.y - (u.r > 20 ? 66 : 54), 30, u.hp / u.maxHp, u.team === 'blue' ? 0x5cc33a : 0xe0483a);
+    for (const u of this.units) if (u.alive && !u.boss && u.hp < u.maxHp) draw(u.x, u.y - (u.r > 20 ? 66 : u.fixed ? 70 : 54), 30, u.hp / u.maxHp, u.team === 'blue' ? 0x5cc33a : 0xe0483a);
+    if (this.bossBar && this.bossUnit) {
+      const bg = this.bossBar.g, f = Math.max(0, this.bossUnit.hp / this.bossUnit.maxHp);
+      bg.clear();
+      bg.fillStyle(0x2b1d14, 0.85).fillRoundedRect(W / 2 - 214, 80, 428, 32, 16);
+      bg.fillStyle(0x5a1a1a, 1).fillRoundedRect(W / 2 - 206, 86, 412, 20, 10);
+      if (f > 0) bg.fillStyle(0xe0483a, 1).fillRoundedRect(W / 2 - 206, 86, Math.max(20, 412 * f), 20, 10);
+      bg.fillStyle(0xffffff, 0.25).fillRoundedRect(W / 2 - 202, 88, Math.max(12, 404 * f), 6, 3);
+    }
   }
 
   // ------------------------------------------------------------- scoring
+  /** Buildings destroyed (walls don't count); a boss counts as three buildings. */
   private percent() {
     const nw = this.buildings.filter((b) => b.kind !== 'wall');
-    return Math.round((nw.filter((b) => !b.alive).length / nw.length) * 100);
+    const BOSS_W = 3;
+    const total = nw.length + (this.bossUnit ? BOSS_W : 0);
+    const done = nw.filter((b) => !b.alive).length + (this.bossUnit && !this.bossUnit.alive ? BOSS_W : 0);
+    return Math.round((done / total) * 100);
   }
 
+  /** At a boss castle no star counts until the boss is beaten. */
   private computeStars() {
+    if (this.bossUnit?.alive) return 0;
     const p = this.percent();
     const keep = this.buildings.find((b) => b.kind === 'keep')!;
     return (p >= 50 ? 1 : 0) + (!keep.alive ? 1 : 0) + (p >= 100 ? 1 : 0);
@@ -748,18 +909,20 @@ export class BattleScene extends Phaser.Scene {
     const back: Record<UnitType, number> = { ...this.pool };
     for (const u of this.units) if (u.alive && u.team === 'blue') back[u.type as UnitType]++;
     const returned = UNIT_ORDER.reduce((s, t) => s + back[t], 0);
-    const prevStars = save.stars[this.castleIdx];
-    const newlyUnlocked = win && prevStars === 0 && this.castleIdx < CASTLES.length - 1;
+    const row = save.kstars[this.k];
+    const prevStars = row[this.castleIdx];
+    const newlyUnlocked = win && prevStars === 0 && this.castleIdx < CASTLES_PER_KINGDOM - 1;
+    const crowned = win && this.castleIdx === CASTLES_PER_KINGDOM - 1 && !this.demo && !save.crowns.includes(this.k);
     if (!this.demo) {
       save.army = back;
       save.gold += loot;
-      save.stars[this.castleIdx] = Math.max(prevStars, stars);
+      row[this.castleIdx] = Math.max(prevStars, stars);
       persist();
     }
-    this.time.delayedCall(700, () => this.showResult(win, stars, pct, loot, returned, newlyUnlocked));
+    this.time.delayedCall(700, () => this.showResult(win, stars, pct, loot, returned, newlyUnlocked, crowned));
   }
 
-  private showResult(win: boolean, stars: number, pct: number, loot: number, returned: number, unlocked: boolean) {
+  private showResult(win: boolean, stars: number, pct: number, loot: number, returned: number, unlocked: boolean, crowned = false) {
     if (musicOn()) playJingle(win ? 'victory' : 'defeat'); else win ? sfx.victory() : sfx.defeat();
     const c = this.add.container(0, 0).setDepth(20000);
     c.add(this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setInteractive());
@@ -800,13 +963,23 @@ export class BattleScene extends Phaser.Scene {
     c.add(lootRow);
     this.tweens.addCounter({ from: 0, to: loot, duration: 900, delay: 600, onUpdate: (tw) => lootTxt.setText(`+${Math.round(tw.getValue() ?? 0)}`), onComplete: () => sfx.coin() });
     const msg = this.demo ? 'Demo battle (progress not saved)'
-      : unlocked ? `New castle unlocked: ${CASTLES[this.castleIdx + 1].name}!`
-      : win ? 'Great attack, commander!' : 'Read more words to train a bigger army!';
+      : crowned ? `You beat ${this.def.boss?.name ?? this.def.name}! Time for your crown!`
+      : unlocked ? `New castle unlocked: ${castleDef(this.k, this.castleIdx + 1).name}!`
+      : win && this.def.boss ? `You beat ${this.def.boss.name} again!`
+      : win ? 'Great attack, commander!'
+      : this.bossUnit?.alive && pct >= 50 ? `So close! Beat ${this.def.boss!.name} to win.`
+      : 'Read more words to train a bigger army!';
     c.add(txt(this, W / 2, 450, `${returned} troop${returned === 1 ? '' : 's'} marched home`, 24, '#bfe3ff'));
     c.add(txt(this, W / 2, 492, msg, 26, unlocked ? '#bfffb0' : '#ffffff'));
-    c.add(button(this, W / 2 - 200, 570, 180, 70, 'Map', COLORS.blue, () => goTo(this, 'Map'), { fontSize: 30 }));
-    c.add(button(this, W / 2, 570, 180, 70, 'Camp', COLORS.purple, () => goTo(this, 'Camp'), { fontSize: 30 }));
-    c.add(button(this, W / 2 + 200, 570, 180, 70, 'Read', COLORS.green, () => goTo(this, 'Read'), { fontSize: 30 }));
+    if (crowned) {
+      const b = button(this, W / 2, 570, 340, 76, 'Get your crown!', COLORS.orange, () => goTo(this, 'Crown', { kingdom: this.k }), { fontSize: 32 });
+      this.tweens.add({ targets: b, scale: 1.06, duration: 500, yoyo: true, repeat: -1 });
+      c.add(b);
+    } else {
+      c.add(button(this, W / 2 - 200, 570, 180, 70, 'Map', COLORS.blue, () => goTo(this, 'Map'), { fontSize: 30 }));
+      c.add(button(this, W / 2, 570, 180, 70, 'Camp', COLORS.purple, () => goTo(this, 'Camp'), { fontSize: 30 }));
+      c.add(button(this, W / 2 + 200, 570, 180, 70, 'Read', COLORS.green, () => goTo(this, 'Read'), { fontSize: 30 }));
+    }
     c.setAlpha(0);
     this.tweens.add({ targets: c, alpha: 1, duration: 300 });
     if (win) {
@@ -814,6 +987,12 @@ export class BattleScene extends Phaser.Scene {
       this.time.delayedCall(2500, () => conf.stop());
     }
   }
+}
+
+/** Multiply two 0xRRGGBB tints. */
+function mulTint(a: number, b: number) {
+  const ch = (s: number) => Math.round((((a >> s) & 255) * ((b >> s) & 255)) / 255) << s;
+  return ch(16) | ch(8) | ch(0);
 }
 
 export { FONT };
