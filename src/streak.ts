@@ -1,8 +1,9 @@
 // Reading streak ("win streak") rules. Pure logic, no Phaser, so it can be unit-tested (scripts/check-streak.ts).
 //
-// - Every word read correctly adds 1 to the streak. Using "Sound it out", "Hear it", or a wrong try or two
+// - Every word read correctly adds 1 to the streak. Using "Sound it out" (tiles, Blend it, Hear word) or a wrong try or two
 //   along the way is fine: it does not break or block the streak.
 // - The streak only breaks when a word is FAILED: the 3rd wrong try on the same word, or pressing Skip.
+//   Pressing "Hear it" (reads the whole word, i.e. gives the answer) also ends it.
 //   Silence / "um" never counts as a wrong try (handled in ReadScene/speech).
 // - Once the streak reaches 3, every NEXT correct word pays double coins (flat 2x, it doesn't keep doubling).
 // - A word that was already failed (3 misses) still pays normal coins when he finally reads it, but it
@@ -47,5 +48,11 @@ export function onMiss(streak: number, missesOnWord: number): MissResult {
 
 /** Skip button: the word is given up on, so the streak ends. */
 export function onSkip(streak: number): MissResult {
+  return { streak: 0, failed: true, broke: streak > 0 };
+}
+
+/** "Hear it" button: the word was read to him, so the streak ends and this word won't count toward a new one.
+ *  With no streak running there is nothing to reset (broke = false, no reset fanfare). */
+export function onHearIt(streak: number): MissResult {
   return { streak: 0, failed: true, broke: streak > 0 };
 }

@@ -73,6 +73,21 @@ await closeSoundOut();
 await readIt(); p = await R(() => window.__lastPayout); a = await scene();
 check('failed word still pays 10, new streak starts next word', p.earned === 10 && a.streak === 0, JSON.stringify(p));
 await readIt(); a = await scene(); check('next word starts a new streak', a.streak === 1, JSON.stringify(a));
+// Hear it: does nothing at streak 1? (no reset effect), ends a running streak
+await readIt(); await readIt(); a = await scene(); check('streak 3 (2x on) before Hear it', a.streak === 3, JSON.stringify(a));
+await at(640 - 300, 545); await page.waitForTimeout(900);
+a = await scene(); check('Hear it ends the streak', a.streak === 0 && (await sv()).streak === 0 && /great practice/.test(a.hint), JSON.stringify(a));
+if (SHOTS) await page.screenshot({ path: 'screenshots/43-hear-it-streak-reset.png' });
+await readIt(); p = await R(() => window.__lastPayout); a = await scene();
+check('heard word pays 10, does not count', p.earned === 10 && a.streak === 0, JSON.stringify(p));
+await at(640 - 300, 545); await page.waitForTimeout(600);
+a = await scene(); check('Hear it at streak 0: no reset message', a.streak === 0 && !/great practice/.test(a.hint), JSON.stringify(a));
+await readIt(); a = await scene(); check('heard word (at 0) does not start a streak', a.streak === 0, JSON.stringify(a));
+await readIt(); a = await scene(); check('next word starts a new streak', a.streak === 1, JSON.stringify(a));
+// Sound it out's Hear word / Blend keep the streak
+await R(() => { const r = window.__game.scene.getScene('Read'); r.openSoundOut(); r.soundOut.blend(); });
+await page.waitForTimeout(1500); await closeSoundOut(); await readIt();
+a = await scene(); check('Sound it out + Blend keeps the streak', a.streak === 2, JSON.stringify(a));
 // Skip ends it
 await at(640 + 300, 545); await page.waitForTimeout(500);
 a = await scene(); check('Skip ends the streak', a.streak === 0, JSON.stringify(a));

@@ -9,7 +9,7 @@ import { WORD_LEVELS } from '../data/words';
 import { SoundOut } from '../soundout';
 import { breakdown, chunkClip } from '../data/phonics';
 import { preload } from '../phonics-audio';
-import { onCorrect, onMiss, onSkip, streakActive, STREAK_TO_START, STREAK_MULT } from '../streak';
+import { onCorrect, onMiss, onSkip, onHearIt, streakActive, STREAK_TO_START, STREAK_MULT } from '../streak';
 
 const MIC_LABELS: Record<MicState, [string, number]> = {
   unknown: ['Mic: tap the mic to start', 0x6b7a8a],
@@ -125,7 +125,7 @@ export class ReadScene extends Phaser.Scene {
     this.micBtn.on('pointerdown', () => (this.listening ? this.stopListening() : this.startListening()));
     this.tweens.add({ targets: this.micBtn, scale: 1.06, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    this.hearBtn = button(this, W / 2 - 300, 545, 210, 76, 'Hear it', COLORS.blue, () => { unlockAudio(); speakWord(this.word); }, { icon: 'speaker', fontSize: 28 });
+    this.hearBtn = button(this, W / 2 - 300, 545, 210, 76, 'Hear it', COLORS.blue, () => { unlockAudio(); this.hearIt(); }, { icon: 'speaker', fontSize: 28 });
     button(this, W / 2 + 300, 545, 210, 76, 'Skip', COLORS.orange, () => this.skip(), { fontSize: 30 });
     // Grown-up override (always available; prominent if speech recognition is unavailable)
     const noSpeech = !speechSupported || !secureContextOk();
@@ -142,7 +142,7 @@ export class ReadScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-SPACE', () => { if (this.soundOut || this.micSettings) return; if (this.listening) this.stopListening(); else this.startListening(); });
     this.input.keyboard?.on('keydown-S', () => this.openSoundOut());
     this.input.keyboard?.on('keydown-Y', () => this.correct('(grown-up)'));
-    this.input.keyboard?.on('keydown-H', () => speakWord(this.word));
+    this.input.keyboard?.on('keydown-H', () => this.hearIt());
     this.events.once('shutdown', () => { this.soundOut?.close(); this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
 
     (window as any).__soundOut = (w?: string) => this.openSoundOut(w);
@@ -345,8 +345,19 @@ export class ReadScene extends Phaser.Scene {
     this.nextWord();
   }
 
+  /** "Hear it" reads the whole word (the answer), so it ends the streak; Sound it out does not. */
+  private hearIt() {
+    speakWord(this.word);
+    const h = onHearIt(this.streak);
+    this.failedWord = true; // this word won't count toward a new streak (pays normal coins)
+    if (h.broke) {
+      this.endStreak('Hearing it is great practice! New streak next word.');
+      this.hintText.setText('Hearing it is great practice! New streak next word.');
+    }
+  }
+
   /** Gentle reset: the flame puffs out, a soft tune, and an encouraging word. No buzzer, no lost coins. */
-  private endStreak() {
+  private endStreak(msg?: string) {
     const was = this.streak;
     this.streak = 0;
     save.streak = 0;
@@ -358,7 +369,8 @@ export class ReadScene extends Phaser.Scene {
       this.tweens.add({ targets: puff, y: puff.y - 34, scale: 0.9, alpha: 0, duration: 700, onComplete: () => puff.destroy() });
     }
     this.updateStreakHud();
-    if (was >= 2) floatText(this, this.streakHud.x, this.streakHud.y + 70, `Streak over (${was}) - start a new one!`, '#ffffff', 20);
+    if (msg) floatText(this, this.streakHud.x, this.streakHud.y + 70, msg, '#ffffff', 20);
+    else if (was >= 2) floatText(this, this.streakHud.x, this.streakHud.y + 70, `Streak over (${was}) - start a new one!`, '#ffffff', 20);
   }
 
   /** Red-and-gold "2x" medal. */

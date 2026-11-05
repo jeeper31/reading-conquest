@@ -1,5 +1,5 @@
 // Unit tests for the reading streak (src/streak.ts). Run: npm test
-import { onCorrect, onMiss, onSkip, streakActive, STREAK_TO_START, STREAK_MULT, MISSES_TO_FAIL } from '../src/streak.ts';
+import { onCorrect, onMiss, onSkip, onHearIt, streakActive, STREAK_TO_START, STREAK_MULT, MISSES_TO_FAIL } from '../src/streak.ts';
 
 let fail = 0, n = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -18,6 +18,7 @@ function run(seq: string) {
   [...seq].forEach((k, i) => {
     let failed = false;
     if (k === 's') { const r = onSkip(streak); if (r.broke) breaks.push(i); streak = r.streak; coins.push(0); return; }
+    if (k === 'e') { const r = onHearIt(streak); if (r.broke) breaks.push(i); streak = r.streak; const c = onCorrect(streak, BASE, r.failed); streak = c.streak; coins.push(c.earned); return; }
     const misses = k === 'h' ? 2 : k === 'f' ? 4 : 0;
     for (let m = 1; m <= misses; m++) {
       const r = onMiss(streak, m);
@@ -40,6 +41,10 @@ eq('helpers keep the streak', run('chchc'), { streak: 5, coins: [10, 10, 10, 20,
 eq('3 misses break it', run('ccccfccc'), { streak: 3, coins: [10, 10, 10, 20, 10, 10, 10, 10], starts: [2, 7], breaks: [4] });
 // Skip breaks it
 eq('skip breaks it', run('cccscc'), { streak: 2, coins: [10, 10, 10, 0, 10, 10], starts: [2], breaks: [3] });
+// Hear it ends the streak; that word pays normal 10 and doesn't count; new streak next word
+eq('hear it breaks it', run('cccceccc'), { streak: 3, coins: [10, 10, 10, 20, 10, 10, 10, 10], starts: [2, 7], breaks: [4] });
+eq('hear it with no streak', onHearIt(0), { streak: 0, failed: true, broke: false });
+eq('hear it mid-streak', onHearIt(4), { streak: 0, failed: true, broke: true });
 // Failing with no streak isn't a "break" (nothing to reset)
 eq('fail with no streak', onMiss(0, 3), { streak: 0, failed: true, broke: false });
 eq('2nd miss keeps streak', onMiss(7, 2), { streak: 7, failed: false, broke: false });
