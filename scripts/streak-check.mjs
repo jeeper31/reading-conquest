@@ -88,6 +88,39 @@ await readIt(); a = await scene(); check('next word starts a new streak', a.stre
 await R(() => { const r = window.__game.scene.getScene('Read'); r.openSoundOut(); r.soundOut.blend(); });
 await page.waitForTimeout(1500); await closeSoundOut(); await readIt();
 a = await scene(); check('Sound it out + Blend keeps the streak', a.streak === 2, JSON.stringify(a));
+// Sound it out's Hear word ends the streak like Hear it
+await readIt(); a = await scene(); check('streak 3 before Hear word', a.streak === 3, JSON.stringify(a));
+await R(() => window.__game.scene.getScene('Read').openSoundOut()); await page.waitForTimeout(700);
+await at(640, 604); await page.waitForTimeout(600);
+a = await scene(); check('Sound it out Hear word ends the streak', a.streak === 0 && /great practice/.test(a.hint), JSON.stringify(a));
+await closeSoundOut(); await readIt(); p = await R(() => window.__lastPayout); a = await scene();
+check('word after Hear word pays 10, does not count', p.earned === 10 && a.streak === 0, JSON.stringify(p));
+// 2x timer: build to 3, check countdown, fast-forward, let it expire
+await readIt(); await readIt(); await readIt(); a = await scene();
+const left = await R(() => window.__game.scene.getScene('Read').bonusLeft);
+check('2x starts with 2:00 timer', a.streak === 3 && left > 115 && left <= 120, `left=${left}`);
+check('bonus time saved', (await sv()).bonusLeft > 100);
+await page.waitForTimeout(2500);
+if (SHOTS) await page.screenshot({ path: 'screenshots/44-bonus-countdown.png' });
+await R(() => window.__setBonusLeft(12)); await page.waitForTimeout(1000);
+if (SHOTS) await page.screenshot({ path: 'screenshots/45-bonus-warning.png' });
+// pauses while Sound it out is open
+await R(() => window.__game.scene.getScene('Read').openSoundOut()); await page.waitForTimeout(300);
+const l1 = await R(() => window.__game.scene.getScene('Read').bonusLeft); await page.waitForTimeout(1500);
+const l2 = await R(() => window.__game.scene.getScene('Read').bonusLeft);
+check('timer pauses during Sound it out', Math.abs(l1 - l2) < 0.05, `${l1} -> ${l2}`);
+await closeSoundOut();
+// survives reload with remaining time
+await R(() => window.__setBonusLeft(4)); await page.waitForTimeout(2200);
+await page.reload(); await page.waitForTimeout(800);
+a = await scene(); const lr = await R(() => window.__game.scene.getScene('Read').bonusLeft);
+check('remaining time resumes after reload', a.streak >= 3 && lr > 0 && lr < 4, `left=${lr}`);
+await page.waitForFunction(() => window.__game.scene.getScene('Read').streak === 0, null, { timeout: 8000 });
+await page.waitForTimeout(500);
+if (SHOTS) await page.screenshot({ path: 'screenshots/46-bonus-time-over.png' });
+a = await scene(); check('expiry resets streak with kind message', a.streak === 0 && /Bonus time is over/.test(a.hint) && (await sv()).streak === 0, JSON.stringify(a));
+await readIt(); p = await R(() => window.__lastPayout); a = await scene();
+check('after expiry: normal 10 coins, new streak counts from this word', p.earned === 10 && a.streak === 1, JSON.stringify(p));
 // Skip ends it
 await at(640 + 300, 545); await page.waitForTimeout(500);
 a = await scene(); check('Skip ends the streak', a.streak === 0, JSON.stringify(a));

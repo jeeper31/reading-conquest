@@ -1,5 +1,5 @@
 // Unit tests for the reading streak (src/streak.ts). Run: npm test
-import { onCorrect, onMiss, onSkip, onHearIt, streakActive, STREAK_TO_START, STREAK_MULT, MISSES_TO_FAIL } from '../src/streak.ts';
+import { onCorrect, onMiss, onSkip, onHearIt, tickBonus, loadBonusLeft, BONUS_SECONDS, streakActive, STREAK_TO_START, STREAK_MULT, MISSES_TO_FAIL } from '../src/streak.ts';
 
 let fail = 0, n = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -45,6 +45,18 @@ eq('skip breaks it', run('cccscc'), { streak: 2, coins: [10, 10, 10, 0, 10, 10],
 eq('hear it breaks it', run('cccceccc'), { streak: 3, coins: [10, 10, 10, 20, 10, 10, 10, 10], starts: [2, 7], breaks: [4] });
 eq('hear it with no streak', onHearIt(0), { streak: 0, failed: true, broke: false });
 eq('hear it mid-streak', onHearIt(4), { streak: 0, failed: true, broke: true });
+// 2x bonus timer
+eq('bonus is 2 minutes', BONUS_SECONDS, 120);
+eq('tick runs down', tickBonus(4, 120, 30), { left: 90, expired: false });
+eq('tick expires', tickBonus(4, 5, 6), { left: 0, expired: true });
+eq('no tick without 2x', tickBonus(2, 50, 10), { left: 0, expired: false });
+eq('negative dt ignored', tickBonus(3, 50, -5), { left: 50, expired: false });
+eq('load resumes saved time', loadBonusLeft(5, 42), 42);
+eq('old save with 2x gets full timer', loadBonusLeft(5, undefined), 120);
+eq('load caps at max', loadBonusLeft(5, 999), 120);
+eq('load with no 2x', loadBonusLeft(2, 42), 0);
+// after expiry the streak is 0, so the next 3 words pay 10 and must be rebuilt
+eq('after expiry back to normal', [onCorrect(0, BASE).earned, onCorrect(1, BASE).earned, onCorrect(2, BASE).started], [10, 10, true]);
 // Failing with no streak isn't a "break" (nothing to reset)
 eq('fail with no streak', onMiss(0, 3), { streak: 0, failed: true, broke: false });
 eq('2nd miss keeps streak', onMiss(7, 2), { streak: 7, failed: false, broke: false });

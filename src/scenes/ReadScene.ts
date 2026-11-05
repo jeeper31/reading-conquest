@@ -9,7 +9,7 @@ import { WORD_LEVELS } from '../data/words';
 import { SoundOut } from '../soundout';
 import { breakdown, chunkClip } from '../data/phonics';
 import { preload } from '../phonics-audio';
-import { onCorrect, onMiss, onSkip, onHearIt, streakActive, STREAK_TO_START, STREAK_MULT } from '../streak';
+import { onCorrect, onMiss, onSkip, onHearIt, tickBonus, loadBonusLeft, BONUS_SECONDS, BONUS_WARN_SECONDS, streakActive, STREAK_TO_START, STREAK_MULT } from '../streak';
 
 const MIC_LABELS: Record<MicState, [string, number]> = {
   unknown: ['Mic: tap the mic to start', 0x6b7a8a],
@@ -36,6 +36,10 @@ export class ReadScene extends Phaser.Scene {
   private listening = false;
   private tries = 0;
   private streak = 0;
+  private bonusLeft = 0; // seconds of 2x left
+  private bonusRing?: Phaser.GameObjects.Graphics;
+  private bonusSecs?: Phaser.GameObjects.Text;
+  private bonusSaveAt = 0;
   private failedWord = false; // this word got 3 wrong tries (streak already ended)
   private streakHud!: Phaser.GameObjects.Container;
   private streakFlame?: Phaser.GameObjects.Image;
@@ -57,7 +61,7 @@ export class ReadScene extends Phaser.Scene {
     fadeIn(this);
     playMusic('read');
     soundToggles(this, 372, 42);
-    this.busy = false; this.listening = false; this.streak = save.streak || 0; this.sessionCount = 0; this.tries = 0;
+    this.busy = false; this.listening = false; this.streak = save.streak || 0; this.bonusLeft = loadBonusLeft(this.streak, save.bonusLeft); this.sessionCount = 0; this.tries = 0;
     // Sky + hills backdrop
     const g = this.add.graphics();
     g.fillGradientStyle(0x6ec6ff, 0x6ec6ff, 0xbfe8ff, 0xbfe8ff, 1).fillRect(0, 0, W, H);
@@ -145,6 +149,7 @@ export class ReadScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-H', () => this.hearIt());
     this.events.once('shutdown', () => { this.soundOut?.close(); this.listener.stop(); setDuck('mic', false); this.input.keyboard?.removeAllListeners(); });
 
+    (window as any).__setBonusLeft = (s: number) => { this.bonusLeft = s; };
     (window as any).__soundOut = (w?: string) => this.openSoundOut(w);
     (window as any).__streakBanner = () => this.showStreakBanner();
     this.nextWord();
@@ -158,6 +163,7 @@ export class ReadScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.soundBtn); this.soundBtn.setScale(1);
     this.soundOut = new SoundOut(this, word, {
       onClose: () => { this.soundOut = undefined; },
+      onHearWord: () => this.hearIt(false),
       onRead: () => this.time.delayedCall(150, () => this.startListening()),
     });
     if (autoBlend) this.time.delayedCall(700, () => this.soundOut?.blend());
@@ -191,7 +197,8 @@ export class ReadScene extends Phaser.Scene {
     this.hintText.setText(speechSupported ? 'Tap the red button (or press Space) and read the word!' : 'Read the word out loud to a grown-up!');
   }
 
-  update() {
+  update(_t: number, delta: number) {
+    this.tickBonusClock(delta);
     // "Listening..." countdown ring: a yellow arc that runs down over the listening window
     this.countdown.clear();
     if (!this.listening) return;
@@ -267,6 +274,8 @@ export class ReadScene extends Phaser.Scene {
     if (this.tries === 0) recordWord(this.word, true);
     const r = onCorrect(this.streak, GOLD_PER_WORD, this.failedWord);
     this.streak = r.streak;
+    if (r.started) this.bonusLeft = BONUS_SECONDS;
+    save.bonusLeft = this.bonusLeft;
     const earned = r.earned;
     this.sessionCount++;
     save.totalRead++;
@@ -346,8 +355,8 @@ export class ReadScene extends Phaser.Scene {
   }
 
   /** "Hear it" reads the whole word (the answer), so it ends the streak; Sound it out does not. */
-  private hearIt() {
-    speakWord(this.word);
+  private hearIt(speak = true) {
+    if (speak) speakWord(this.word);
     const h = onHearIt(this.streak);
     this.failedWord = true; // this word won't count toward a new streak (pays normal coins)
     if (h.broke) {
@@ -356,11 +365,49 @@ export class ReadScene extends Phaser.Scene {
     }
   }
 
+  /** 2x bonus clock. Ticks only while this Read screen runs (Phaser stops calling update() in Camp/Map/battle
+   *  and when the tab is hidden), and pauses while the Sound it out panel, settings, or a reward animation is up. */
+  private tickBonusClock(deltaMs: number) {
+    if (!streakActive(this.streak)) return;
+    const paused = !!this.soundOut || !!this.settings || this.busy || document.hidden;
+    if (!paused) {
+      const t = tickBonus(this.streak, this.bonusLeft, Math.min(deltaMs, 250) / 1000);
+      this.bonusLeft = t.left;
+      if (t.expired) return this.bonusOver();
+      if (this.time.now > this.bonusSaveAt) { this.bonusSaveAt = this.time.now + 2000; save.bonusLeft = this.bonusLeft; persist(); }
+    }
+    this.drawBonusRing();
+  }
+
+  private drawBonusRing() {
+    const g = this.bonusRing, fx = this.streakFlame;
+    if (!g || !fx || !g.active) return;
+    const frac = this.bonusLeft / BONUS_SECONDS;
+    const warn = this.bonusLeft <= BONUS_WARN_SECONDS;
+    const blink = warn && Math.floor(this.time.now / 250) % 2 === 0;
+    const col = warn ? (blink ? 0xff3b30 : 0xffffff) : 0xffe14d;
+    g.clear();
+    g.lineStyle(7, 0x000000, 0.45).strokeCircle(fx.x, 0, 24);
+    g.lineStyle(7, col, 1).beginPath().arc(fx.x, 0, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac, false).strokePath();
+    const s = Math.ceil(this.bonusLeft);
+    this.bonusSecs?.setText(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`).setColor(warn ? (blink ? '#ff5a4f' : '#ffffff') : '#ffe14d');
+    if (warn) this.bonusSecs?.setScale(blink ? 1.15 : 1);
+  }
+
+  /** Bonus time ran out: gentle, not a punishment. Coins stay; build a new streak from the next word. */
+  private bonusOver() {
+    this.endStreak('Bonus time is over! Build a new streak!');
+    this.failedWord = false; // the current word can start the new streak
+    this.hintText.setText('Bonus time is over! Build a new streak!');
+    (window as any).__bonusOverAt = Date.now();
+  }
+
   /** Gentle reset: the flame puffs out, a soft tune, and an encouraging word. No buzzer, no lost coins. */
   private endStreak(msg?: string) {
     const was = this.streak;
     this.streak = 0;
     save.streak = 0;
+    this.bonusLeft = 0; save.bonusLeft = 0;
     persist();
     this.time.delayedCall(350, () => sfx.streakEnd());
     const fx = this.streakFlame;
@@ -392,7 +439,7 @@ export class ReadScene extends Phaser.Scene {
     c.each((o: Phaser.GameObjects.GameObject) => this.tweens.killTweensOf(o));
     c.removeAll(true);
     const on = streakActive(this.streak);
-    const w = 270, h = 54;
+    const w = on ? 350 : 270, h = 54;
     const g = this.add.graphics();
     g.fillStyle(0x2b1d14, 0.85).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
     if (on) g.lineStyle(4, 0xffc93a, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
@@ -411,8 +458,13 @@ export class ReadScene extends Phaser.Scene {
       bg.fillStyle(0xffffff, 0.25).fillRoundedRect(-60, -16, 120, 12, 6);
       badge.add([bg, txt(this, 0, 0, `${STREAK_MULT}x COINS`, 24, '#ffffff')]);
       c.add(badge);
+      badge.x = 20;
+      this.bonusRing = this.add.graphics(); c.add(this.bonusRing);
+      this.bonusSecs = txt(this, w / 2 - 44, 0, '', 26, '#ffe14d'); c.add(this.bonusSecs);
+      this.drawBonusRing();
       this.tweens.add({ targets: badge, scale: 1.08, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else {
+      this.bonusRing = undefined; this.bonusSecs = undefined;
       // three pips: how many more words until the 2x
       for (let i = 0; i < STREAK_TO_START; i++) {
         const done = i < this.streak;

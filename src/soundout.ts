@@ -38,7 +38,7 @@ export class SoundOut {
   private chunks: Chunk[];
   private keyHandler = () => this.close();
 
-  constructor(private scene: Phaser.Scene, readonly word: string, private opts: { onClose?: () => void; onRead?: () => void } = {}) {
+  constructor(private scene: Phaser.Scene, readonly word: string, private opts: { onClose?: () => void; onRead?: () => void; onHearWord?: () => void } = {}) {
     this.chunks = chunksFor(word);
     preload(word, this.chunks.filter((c) => c.sounds.length).map(chunkClip));
     const root = (this.root = scene.add.container(0, 0).setDepth(400));
@@ -67,7 +67,7 @@ export class SoundOut {
 
     this.blendBtn = button(scene, W / 2 - 300, 604, 260, 84, 'Blend it', COLORS.green, () => this.blend(), { icon: 'speaker', fontSize: 32 });
     root.add(this.blendBtn);
-    root.add(button(scene, W / 2, 604, 250, 84, 'Hear word', COLORS.blue, () => { stopBlend(); this.wave(); playWord(word); }, { icon: 'speaker', fontSize: 30 }));
+    root.add(button(scene, W / 2, 604, 250, 84, 'Hear word', COLORS.blue, () => { stopBlend(); this.wave(); playWord(word); this.opts.onHearWord?.(); }, { icon: 'speaker', fontSize: 30 }));
     root.add(button(scene, W / 2 + 300, 604, 260, 84, 'Read it!', COLORS.orange, () => { this.close(); this.opts.onRead?.(); }, { icon: 'mic', fontSize: 32, iconScale: 0.8 }));
 
     root.setAlpha(0);

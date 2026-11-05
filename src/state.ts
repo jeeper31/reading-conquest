@@ -59,6 +59,7 @@ export interface SaveData {
   totalRead: number;
   bestStreak: number;
   streak: number; // current reading streak (kept between visits; ends when a word is failed)
+  bonusLeft?: number; // seconds of 2x bonus time left (only meaningful while streak >= 3)
   heroName: string;
 }
 
@@ -83,6 +84,7 @@ function fresh(): SaveData {
     totalRead: 0,
     bestStreak: 0,
     streak: 0,
+    bonusLeft: 0,
     heroName: 'Sir Reader',
   };
 }

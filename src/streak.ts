@@ -3,7 +3,8 @@
 // - Every word read correctly adds 1 to the streak. Using "Sound it out" (tiles, Blend it, Hear word) or a wrong try or two
 //   along the way is fine: it does not break or block the streak.
 // - The streak only breaks when a word is FAILED: the 3rd wrong try on the same word, or pressing Skip.
-//   Pressing "Hear it" (reads the whole word, i.e. gives the answer) also ends it.
+//   The 2x only lasts BONUS_SECONDS after it switches on; when time runs out the streak goes back to 0.
+//   Pressing "Hear it" (or Sound it out's "Hear word") (reads the whole word, i.e. gives the answer) also ends it.
 //   Silence / "um" never counts as a wrong try (handled in ReadScene/speech).
 // - Once the streak reaches 3, every NEXT correct word pays double coins (flat 2x, it doesn't keep doubling).
 // - A word that was already failed (3 misses) still pays normal coins when he finally reads it, but it
@@ -14,6 +15,21 @@ export const STREAK_MULT = 2; // coin multiplier while the streak is on
 export const MISSES_TO_FAIL = 3; // wrong tries on one word that count as failing it
 export const MILESTONE_EVERY = 5; // every 5th word in a row also gives a bonus (kept from before)
 export const MILESTONE_BONUS = 20;
+export const BONUS_SECONDS = 120; // how long the 2x lasts once it switches on (the only place to change it)
+export const BONUS_WARN_SECONDS = 15; // countdown flickers in the last few seconds
+
+export interface TickResult { left: number; expired: boolean }
+/** Run the 2x bonus clock down by `dt` seconds. Only ticks while the 2x is on. Expiry ends the streak (back to 0). */
+export function tickBonus(streak: number, left: number, dt: number): TickResult {
+  if (!streakActive(streak)) return { left: 0, expired: false };
+  const next = Math.max(0, left - Math.max(0, dt));
+  return { left: next, expired: next <= 0 };
+}
+/** Bonus time to use for a loaded save: older saves with a running 2x but no timer get a fresh full timer. */
+export function loadBonusLeft(streak: number, saved: number | undefined): number {
+  if (!streakActive(streak)) return 0;
+  return saved && saved > 0 ? Math.min(saved, BONUS_SECONDS) : BONUS_SECONDS;
+}
 
 /** Is the 2x on for the next correct word, given the current streak? */
 export function streakActive(streak: number): boolean {
