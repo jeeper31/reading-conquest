@@ -1,0 +1,13 @@
+import { winStars, battleLoot } from '../src/battle-rules.ts';
+let fail = 0;
+const eq = (n: string, g: unknown, w: unknown) => { if (JSON.stringify(g) !== JSON.stringify(w)) { fail++; console.log(`FAIL ${n}: ${JSON.stringify(g)} != ${JSON.stringify(w)}`); } };
+eq('50% is not a win', winStars(50, false, 150), 0);
+eq('99% is not a win', winStars(99, false, 150), 0);
+eq('100% with boss alive is not a win', winStars(100, true, 150), 0);
+eq('100% slow = 1 star', winStars(100, false, 10), 1);
+eq('100% with 45s = 2', winStars(100, false, 45), 2);
+eq('100% with 90s = 3', winStars(100, false, 120), 3);
+eq('win loot', battleLoot(100, 100, true), 120);
+eq('consolation 82%', battleLoot(100, 82, false), 41);
+eq('consolation 0%', battleLoot(100, 0, false), 0);
+if (fail) { console.log(`battle: ${fail} FAILED`); process.exit(1); } else console.log('battle: all 9 checks passed');

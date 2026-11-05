@@ -7,7 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types scripts/check-phonics.ts && node --experimental-strip-types scripts/check-match.ts && node --experimental-strip-types scripts/check-streak.ts && node --experimental-strip-types scripts/check-gear.ts && node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/check-kingdoms.ts",
+    "test": "node --experimental-strip-types scripts/check-phonics.ts && node --experimental-strip-types scripts/check-match.ts && node --experimental-strip-types scripts/check-streak.ts && node --experimental-strip-types scripts/check-battle.ts && node --experimental-strip-types scripts/check-gear.ts && node --experimental-strip-types --import ./scripts/ts-resolve.mjs scripts/check-kingdoms.ts",
     "dev:https": "HTTPS=1 vite",
     "preview:https": "HTTPS=1 vite preview",
     "screenshots": "node scripts/screenshots.mjs",

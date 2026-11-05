@@ -1,3 +1,4 @@
+import { winStars, battleLoot } from '../battle-rules';
 import Phaser from 'phaser';
 import { playMusic, playJingle, musicOn } from '../music/player';
 import { W, H, txt, button, COLORS, goTo, fadeIn, panel, tiledGrass, scatterDecor, floatText, FONT , soundToggles } from '../ui';
@@ -87,6 +88,7 @@ export class BattleScene extends Phaser.Scene {
   private timerText!: Phaser.GameObjects.Text;
   private hudStars: Phaser.GameObjects.Image[] = [];
   private starsEarned = 0;
+  private winAt = false;
   private hint?: Phaser.GameObjects.Container;
   private deployTimer?: Phaser.Time.TimerEvent;
   private demo = false;
@@ -110,7 +112,7 @@ export class BattleScene extends Phaser.Scene {
     playMusic(this.def.boss ? 'boss' : 'battle');
     soundToggles(this, 862, 40);
     this.buildings = []; this.units = []; this.cards = {}; this.hudStars = []; this.bossUnit = undefined; this.bossBar = undefined;
-    this.timeLeft = BATTLE_TIME; this.started = false; this.over = false; this.starsEarned = 0; this.deployedAny = false;
+    this.timeLeft = BATTLE_TIME; this.started = false; this.over = false; this.starsEarned = 0; this.deployedAny = false; this.winAt = false;
     this.pool = this.demo && !this.realArmy ? { knight: 10, archer: 8, spearman: 5, ram: 2, catapult: 2 } : { ...save.army };
     this.time.timeScale = this.speed; this.tweens.timeScale = this.speed;
     this.selected = UNIT_ORDER.find((t) => this.pool[t] > 0) ?? null;
@@ -285,6 +287,7 @@ export class BattleScene extends Phaser.Scene {
     g.fillStyle(0x2b1d14, 0.75).fillRoundedRect(W / 2 - 150, 12, 300, 56, 28);
     txt(this, 206, 40, `${this.castleIdx + 1}. ${this.def.name}`, 28).setDepth(9901);
     this.pctText = txt(this, W / 2 - 60, 40, '0%', 30, '#ffe14d').setDepth(9901);
+    txt(this, W / 2, 82, 'Destroy 100% to win!', 20, '#ffffff').setDepth(9901);
     for (let i = 0; i < 3; i++) this.hudStars.push(this.add.image(W / 2 + 30 + i * 40, 40, 'star_empty').setScale(0.42).setDepth(9901));
     this.timerText = txt(this, W - 270, 40, '3:00', 30).setDepth(9901);
     button(this, W - 110, 40, 170, 56, 'End Battle', COLORS.red, () => this.endBattle(), { fontSize: 22 }).setDepth(9901);
@@ -866,21 +869,20 @@ export class BattleScene extends Phaser.Scene {
   }
 
   // ------------------------------------------------------------- scoring
-  /** Buildings destroyed (walls don't count); a boss counts as three buildings. */
+  /** How much of "the castle" is destroyed: keep + towers + storehouses (+ the boss, worth 3). Walls and enemy
+   *  soldiers don't count. Floored, so 100% only shows when everything is down. */
   private percent() {
     const nw = this.buildings.filter((b) => b.kind !== 'wall');
     const BOSS_W = 3;
     const total = nw.length + (this.bossUnit ? BOSS_W : 0);
     const done = nw.filter((b) => !b.alive).length + (this.bossUnit && !this.bossUnit.alive ? BOSS_W : 0);
-    return Math.round((done / total) * 100);
+    return Math.floor((done / total) * 100);
   }
 
-  /** At a boss castle no star counts until the boss is beaten. */
+  /** A win needs 100% (keep, every tower and storehouse, and the boss). Stars rate how fast he won:
+   *  1 star = win, 2 = with 45+ s left, 3 = with 90+ s left (see winStars). No win = 0 stars. */
   private computeStars() {
-    if (this.bossUnit?.alive) return 0;
-    const p = this.percent();
-    const keep = this.buildings.find((b) => b.kind === 'keep')!;
-    return (p >= 50 ? 1 : 0) + (!keep.alive ? 1 : 0) + (p >= 100 ? 1 : 0);
+    return winStars(this.percent(), !!this.bossUnit?.alive, this.timeLeft);
   }
 
   private updateProgress() {
@@ -894,7 +896,7 @@ export class BattleScene extends Phaser.Scene {
       sfx.star(this.starsEarned);
       this.starsEarned++;
     }
-    if (p >= 100) this.time.delayedCall(1200, () => this.endBattle());
+    if (p >= 100 && !this.winAt) { this.winAt = true; this.time.delayedCall(1200, () => this.endBattle()); }
   }
 
   private endBattle() {
@@ -904,7 +906,7 @@ export class BattleScene extends Phaser.Scene {
     const stars = this.computeStars();
     const pct = this.percent();
     const win = stars > 0;
-    const loot = Math.round(this.def.loot * (pct / 100)) + (win ? 20 : 0);
+    const loot = battleLoot(this.def.loot, pct, win);
     // survivors + undeployed troops return to camp
     const back: Record<UnitType, number> = { ...this.pool };
     for (const u of this.units) if (u.alive && u.team === 'blue') back[u.type as UnitType]++;
@@ -919,6 +921,7 @@ export class BattleScene extends Phaser.Scene {
       row[this.castleIdx] = Math.max(prevStars, stars);
       persist();
     }
+    (window as any).__battleResult = { win, stars, pct, loot };
     this.time.delayedCall(700, () => this.showResult(win, stars, pct, loot, returned, newlyUnlocked, crowned));
   }
 
@@ -944,7 +947,7 @@ export class BattleScene extends Phaser.Scene {
     rb.fillStyle(col, 1).fillRoundedRect(W / 2 - 280, 198, 560, 84, 18);
     rb.fillStyle(0xffffff, 0.25).fillRoundedRect(W / 2 - 270, 204, 540, 22, 10);
     c.add(rb);
-    c.add(txt(this, W / 2, 240, win ? 'VICTORY!' : 'RETREAT!', 60, '#ffe14d'));
+    c.add(txt(this, W / 2, 240, win ? 'VICTORY!' : pct >= 50 ? 'SO CLOSE!' : 'RETREAT!', 60, '#ffe14d'));
     for (let i = 0; i < 3; i++) {
       const sx = W / 2 - 110 + i * 110, sy = 120 - (i === 1 ? 20 : 0);
       const empty = this.add.image(sx, sy, 'star_empty').setScale(i === 1 ? 1.3 : 1.05);
@@ -955,20 +958,21 @@ export class BattleScene extends Phaser.Scene {
         this.tweens.add({ targets: st, scale: i === 1 ? 1.3 : 1.05, angle: 0, duration: 450, delay: 400 + i * 450, ease: 'Back.easeOut', onStart: () => sfx.star(i) });
       }
     }
-    c.add(txt(this, W / 2, 330, `${pct}% destroyed`, 34, '#ffffff'));
+    c.add(txt(this, W / 2, 330, win ? 'Castle 100% destroyed!' : `${pct}% of the castle destroyed`, 34, '#ffffff'));
     const lootRow = this.add.container(W / 2, 390);
     lootRow.add(this.add.image(-90, 0, 'coin').setScale(1.8));
     const lootTxt = txt(this, 20, 0, '+0', 44, '#ffe14d');
     lootRow.add(lootTxt);
     c.add(lootRow);
     this.tweens.addCounter({ from: 0, to: loot, duration: 900, delay: 600, onUpdate: (tw) => lootTxt.setText(`+${Math.round(tw.getValue() ?? 0)}`), onComplete: () => sfx.coin() });
-    const msg = this.demo ? 'Demo battle (progress not saved)'
-      : crowned ? `You beat ${this.def.boss?.name ?? this.def.name}! Time for your crown!`
+    if (this.demo) c.add(txt(this, W / 2, 616, '(demo battle - progress not saved)', 18, '#cccccc'));
+    const msg = crowned ? `You beat ${this.def.boss?.name ?? this.def.name}! Time for your crown!`
       : unlocked ? `New castle unlocked: ${castleDef(this.k, this.castleIdx + 1).name}!`
       : win && this.def.boss ? `You beat ${this.def.boss.name} again!`
       : win ? 'Great attack, commander!'
       : this.bossUnit?.alive && pct >= 50 ? `So close! Beat ${this.def.boss!.name} to win.`
-      : 'Read more words to train a bigger army!';
+      : pct >= 50 ? `So close! ${pct}% - read more words to grow your army!`
+      : `${pct}% - read more words to grow your army!`;
     c.add(txt(this, W / 2, 450, `${returned} troop${returned === 1 ? '' : 's'} marched home`, 24, '#bfe3ff'));
     c.add(txt(this, W / 2, 492, msg, 26, unlocked ? '#bfffb0' : '#ffffff'));
     if (crowned) {
